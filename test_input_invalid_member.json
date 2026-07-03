@@ -10,11 +10,9 @@
   "members": [
     {
       "name": "不正データ例",
+      "grade": "1",
       "skill_stage": 3,
-      "count": 0,
-      "ng_bands": [],
-      "ng_times": [],
-      "req_bands": []
+      "count": 0
     }
   ]
 }

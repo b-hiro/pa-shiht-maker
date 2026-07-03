@@ -8,6 +8,9 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import copy
+import random
+import statistics
+from collections import defaultdict
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from io import BytesIO
@@ -16,8 +19,27 @@ app = Flask(__name__)
 CORS(app)  # CORS対応
 
 DESK_SCORE_THRESHOLD = 5
-STAGE_SCORE_THRESHOLD = 3
+STAGE_SCORE_THRESHOLD = 5
 CONTINUITY_BONUS = 20
+
+# 複数パターンを生成し最良案を選ぶ際の試行回数（リクエストの candidate_count で上書き可）
+DEFAULT_CANDIDATE_COUNT = 12
+MAX_CANDIDATE_COUNT = 50
+# 優先度が近い候補者の間で毎回違う組み合わせを試すためのランダムな揺らぎの幅
+PRIORITY_JITTER = 4
+
+
+class _ZeroJitter:
+    """揺らぎ無し（従来通りの純粋な貪欲法）の候補を1つは必ず含めるためのダミーRNG"""
+
+    def uniform(self, a, b):
+        return 0
+
+    def random(self):
+        return 0
+
+
+_ZERO_JITTER = _ZeroJitter()
 
 
 def parse_time_slot(time_slot):
@@ -68,8 +90,9 @@ def has_time_conflict(band_slots, member, day_num=None):
 def validate_member_structure(member, index):
     """
     メンバー1件の必須項目と型・値を検証する
+    ng_bands / ng_times / req_bands / grade は任意項目（欠けていてもOK）
     """
-    required_keys = ["name", "skill_desk", "skill_stage", "count", "ng_bands"]
+    required_keys = ["name", "skill_desk", "skill_stage", "count"]
     for key in required_keys:
         if key not in member:
             return f"members[{index}] に必須キー '{key}' がありません"
@@ -84,12 +107,17 @@ def validate_member_structure(member, index):
         if member[field] < 0:
             return f"members[{index}].{field} は0以上である必要があります"
 
-    if not isinstance(member["ng_bands"], list):
+    ng_bands = member.get("ng_bands", [])
+    if ng_bands is not None and not isinstance(ng_bands, list):
         return f"members[{index}].ng_bands は配列である必要があります"
 
     req_bands = member.get("req_bands", [])
     if req_bands is not None and not isinstance(req_bands, list):
         return f"members[{index}].req_bands は配列である必要があります"
+
+    grade = member.get("grade")
+    if grade is not None and not isinstance(grade, (str, int, float)):
+        return f"members[{index}].grade は文字列または数値である必要があります"
 
     ng_times = member.get("ng_times", [])
     if isinstance(ng_times, list):
@@ -135,6 +163,99 @@ def validate_members(members):
     return None
 
 
+def normalize_member(member):
+    """
+    ng_bands / ng_times / req_bands / grade が欠けているメンバーにデフォルト値を補完する（非破壊）
+    count / desk_count / stage_count は生成のたびに必ず 0 にリセットする。
+    （フロントエンドが前回の生成結果（count が加算済みのmembers）をそのまま次回リクエストに
+    使い回すケースがあり、リセットしないと配置回数の上限に誤って抵触し続けてしまうため）
+    """
+    normalized = dict(member)
+    normalized["ng_bands"] = normalized.get("ng_bands") or []
+    normalized["ng_times"] = normalized.get("ng_times") or []
+    normalized["req_bands"] = normalized.get("req_bands") or []
+    normalized.setdefault("grade", None)
+    normalized["count"] = 0
+    normalized["desk_count"] = 0
+    normalized["stage_count"] = 0
+    return normalized
+
+
+def normalize_members(members):
+    """
+    メンバー配列全体を正規化する
+    """
+    return [normalize_member(m) for m in members]
+
+
+def _validate_optional_non_negative_number(value, field_name):
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return f"{field_name} は数値である必要があります"
+    if value < 0:
+        return f"{field_name} は0以上である必要があります"
+    return None
+
+
+def _validate_optional_non_negative_int(value, field_name):
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return f"{field_name} は整数である必要があります"
+    if value < 0:
+        return f"{field_name} は0以上である必要があります"
+    return None
+
+
+def parse_shift_config(data):
+    """
+    リクエストボディから任意の詳細設定（スコア基準・人数上限・個人/学年別の配置上限など）を取り出し検証する
+    戻り値: (config_dict, error_message)  ※どの項目も省略可能で、省略時は従来通りの動作になる
+    """
+    data = data or {}
+    config = {
+        "desk_score_threshold": data.get("desk_score_threshold", DESK_SCORE_THRESHOLD),
+        "stage_score_threshold": data.get("stage_score_threshold", STAGE_SCORE_THRESHOLD),
+        "desk_max_members": data.get("desk_max_members"),
+        "stage_max_members": data.get("stage_max_members"),
+        "desk_limit_per_member": data.get("desk_limit_per_member"),
+        "stage_limit_per_member": data.get("stage_limit_per_member"),
+        "grade_limits": data.get("grade_limits", {}) or {},
+        "candidate_count": data.get("candidate_count", DEFAULT_CANDIDATE_COUNT),
+    }
+
+    for field in ("desk_score_threshold", "stage_score_threshold"):
+        error = _validate_optional_non_negative_number(config[field], field)
+        if error:
+            return None, error
+
+    for field in ("desk_max_members", "stage_max_members", "desk_limit_per_member", "stage_limit_per_member"):
+        error = _validate_optional_non_negative_int(config[field], field)
+        if error:
+            return None, error
+
+    if not isinstance(config["grade_limits"], dict):
+        return None, "grade_limits はオブジェクトである必要があります"
+    for grade_key, limits in config["grade_limits"].items():
+        if not isinstance(limits, dict):
+            return None, f"grade_limits['{grade_key}'] はオブジェクトである必要があります"
+        for role_key in ("desk_max", "stage_max"):
+            if role_key in limits:
+                error = _validate_optional_non_negative_int(
+                    limits.get(role_key), f"grade_limits['{grade_key}'].{role_key}"
+                )
+                if error:
+                    return None, error
+
+    candidate_count = config["candidate_count"]
+    if isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or candidate_count < 1:
+        return None, "candidate_count は1以上の整数である必要があります"
+    config["candidate_count"] = max(1, min(candidate_count, MAX_CANDIDATE_COUNT))
+
+    return config, None
+
+
 def day_sort_key(day_key):
     """
     day_1, day_2, ... を数値としてソートする
@@ -176,156 +297,265 @@ def generate_timetable(start_time_str, band_list, rh_mins, act_mins, break_info=
     return timetable
 
 
-def generate_pa_shift(timetable, members_data, day_num=None):
+def _band_order_and_times(timetable):
     """
-    PAシフトを作成する関数（v2：リハ・本番セット化＆インターバル制約対応）
+    タイムテーブルから「シフト対象のバンド」と時間帯、前後の順序を整理する
     """
-    members = copy.deepcopy(members_data)
-    shift_result = {}
-    infeasible_bands = []
-
-    # 1. タイムテーブルから「シフト対象のバンド」と「前後の順番」を整理する
     band_times = {}  # {"バンド名": ["リハ時間", "本番時間"]}
-    band_order = []  # 前後関係を把握するためのリスト
-
+    band_order = []
     for entry in timetable:
         if entry["type"] == "break":
             continue  # 休憩はシフト計算から除外
-
         b_name = entry["name"]
         if b_name not in band_times:
             band_times[b_name] = []
             band_order.append(b_name)
         band_times[b_name].append(entry["time"])
+    return band_order, band_times
 
-    # 各メンバーの仕事回数の上限を計算（バンド数*4/登録メンバー数）
-    num_bands = len(band_order)
-    num_members = len(members)
-    shift_limit = (num_bands * 4) / num_members if num_members > 0 else float('inf')
 
-    # 2. バンドごとにシフトを計算（ここでリハと本番が1セットとして扱われます）
+def _member_grade_key(member):
+    grade = member.get("grade")
+    if grade is None:
+        return None
+    return str(grade)
+
+
+def _grade_role_limit_ok(member, role, grade_totals, config):
+    """
+    学年ごとの卓/ステージ合計配置上限（grade_limits）を超えていないか
+    """
+    grade_key = _member_grade_key(member)
+    if grade_key is None:
+        return True
+    limits = config.get("grade_limits", {}).get(grade_key)
+    if not limits:
+        return True
+    limit = limits.get(f"{role}_max")
+    if limit is None:
+        return True
+    return grade_totals[role][grade_key] < limit
+
+
+def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members, grade_totals, config, rng, day_num, shift_limit):
+    """
+    1バンド分の卓・ステージ担当を決定し、メンバーの状態（count/desk_count/stage_count）と
+    学年別合計（grade_totals）を更新する
+    """
+    desk_threshold = config["desk_score_threshold"]
+    stage_threshold = config["stage_score_threshold"]
+    desk_max_members = config.get("desk_max_members")
+    stage_max_members = config.get("stage_max_members")
+    desk_limit_per_member = config.get("desk_limit_per_member")
+    stage_limit_per_member = config.get("stage_limit_per_member")
+
+    def base_eligible(m):
+        # 上限チェック：仕事回数が上限に達していないか
+        if m["count"] >= shift_limit:
+            return False
+        # NG判定①：自分が出演するバンド、またはその「前後」ならシフト不可
+        if band in m["ng_bands"] or prev_band in m["ng_bands"] or next_band in m["ng_bands"]:
+            return False
+        # NG判定②：NG時間に1分でも被っているか（部分一致判定）
+        if has_time_conflict(band_slots, m, day_num):
+            return False
+        return True
+
+    # 卓チーム編成
+    available_desk = []
+    for m in members:
+        if not base_eligible(m):
+            continue
+        if desk_limit_per_member is not None and m["desk_count"] >= desk_limit_per_member:
+            continue
+        if not _grade_role_limit_ok(m, "desk", grade_totals, config):
+            continue
+
+        priority_desk = -m["count"] * 10
+        if band in m["req_bands"]:
+            priority_desk += 100
+        priority_desk += m["skill_desk"]
+        if m["name"] in prev_assigned:
+            priority_desk += CONTINUITY_BONUS
+        priority_desk += rng.uniform(0, PRIORITY_JITTER)
+
+        candidate = m.copy()
+        candidate["priority_desk"] = priority_desk
+        available_desk.append(candidate)
+
+    available_desk.sort(key=lambda x: x["priority_desk"], reverse=True)
+
+    desk_team = []
+    desk_score = 0
+    for m in available_desk:
+        if desk_score >= desk_threshold:
+            break
+        if desk_max_members is not None and len(desk_team) >= desk_max_members:
+            break
+        desk_team.append(m)
+        desk_score += m["skill_desk"]
+
+    # ステージチーム編成（すでに卓に割り当てられたメンバーは除く）
+    desk_team_names = {m["name"] for m in desk_team}
+    available_stage = []
+    for m in members:
+        if m["name"] in desk_team_names:
+            continue
+        if not base_eligible(m):
+            continue
+        if stage_limit_per_member is not None and m["stage_count"] >= stage_limit_per_member:
+            continue
+        if not _grade_role_limit_ok(m, "stage", grade_totals, config):
+            continue
+
+        priority_stage = -m["count"] * 10
+        if band in m["req_bands"]:
+            priority_stage += 100
+        priority_stage += m["skill_stage"]
+        if m["name"] in prev_assigned:
+            priority_stage += CONTINUITY_BONUS
+        priority_stage += rng.uniform(0, PRIORITY_JITTER)
+
+        candidate = m.copy()
+        candidate["priority_stage"] = priority_stage
+        available_stage.append(candidate)
+
+    available_stage.sort(key=lambda x: x["priority_stage"], reverse=True)
+
+    stage_team = []
+    stage_score = 0
+    for m in available_stage:
+        if stage_score >= stage_threshold:
+            break
+        if stage_max_members is not None and len(stage_team) >= stage_max_members:
+            break
+        stage_team.append(m)
+        stage_score += m["skill_stage"]
+
+    # 状態更新（カウント・学年別合計）
+    desk_names = [m["name"] for m in desk_team]
+    stage_names = [m["name"] for m in stage_team]
+    assigned_names = set(desk_names) | set(stage_names)
+    for m in members:
+        if m["name"] in assigned_names:
+            m["count"] += 1
+        if m["name"] in desk_names:
+            m["desk_count"] += 1
+            grade_key = _member_grade_key(m)
+            if grade_key is not None:
+                grade_totals["desk"][grade_key] += 1
+        if m["name"] in stage_names:
+            m["stage_count"] += 1
+            grade_key = _member_grade_key(m)
+            if grade_key is not None:
+                grade_totals["stage"][grade_key] += 1
+
+    band_result = {"卓": desk_names, "ステージ": stage_names}
+
+    infeasible_entry = None
+    if desk_score < desk_threshold or stage_score < stage_threshold:
+        reasons = []
+        if desk_score < desk_threshold:
+            reasons.append(
+                f"卓スコアが{desk_score}/{desk_threshold}で不足しています"
+                "（NG条件・学年/個人ごとの配置上限・卓の人数上限などにより、対応できる候補者が不足している可能性があります）"
+            )
+        if stage_score < stage_threshold:
+            reasons.append(
+                f"ステージスコアが{stage_score}/{stage_threshold}で不足しています"
+                "（NG条件・学年/個人ごとの配置上限・ステージの人数上限などにより、対応できる候補者が不足している可能性があります）"
+            )
+        infeasible_entry = {
+            "band": band,
+            "desk_score": desk_score,
+            "stage_score": stage_score,
+            "desk_required": desk_threshold,
+            "stage_required": stage_threshold,
+            "desk_members": desk_names,
+            "stage_members": stage_names,
+            "reason": " / ".join(reasons),
+        }
+
+    return band_result, desk_score, stage_score, infeasible_entry
+
+
+def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, day_num=None):
+    """
+    1日分のタイムテーブルに対して、バンド順にシフトを組み立てる（コア処理・非候補探索）
+    """
+    band_order, band_times = _band_order_and_times(timetable)
+
+    day_shift = {}
+    infeasible_bands = []
+    band_scores = []
+
     for i, band in enumerate(band_order):
-        desk_team = []
-        stage_team = []
-        desk_score = 0
-        stage_score = 0
-
-        # --- 新仕様：前後のバンドを取得 ---
         prev_band = band_order[i - 1] if i > 0 else None
         next_band = band_order[i + 1] if i < len(band_order) - 1 else None
 
-        # 前のバンドで割り当てられた人を取得（連続性ボーナス用）
         prev_assigned = set()
-        if prev_band and prev_band in shift_result:
-            prev_assigned = set(shift_result[prev_band]["卓"] + shift_result[prev_band]["ステージ"])
+        if prev_band and prev_band in day_shift:
+            prev_assigned = set(day_shift[prev_band]["卓"] + day_shift[prev_band]["ステージ"])
 
-        # 卓チーム編成
-        available_desk = []
-        for m in members:
-            # 上限チェック：仕事回数が上限に達していないか
-            if m["count"] >= shift_limit:
-                continue
+        band_result, desk_score, stage_score, infeasible_entry = _assign_band(
+            band, band_times[band], prev_band, next_band, prev_assigned,
+            members, grade_totals, config, rng, day_num, shift_limit,
+        )
+        day_shift[band] = band_result
+        band_scores.append(desk_score + stage_score)
+        if infeasible_entry:
+            infeasible_bands.append(infeasible_entry)
 
-            # NG判定①：自分が出演するバンド、またはその「前後」ならシフト不可
-            if (
-                band in m["ng_bands"]
-                or prev_band in m["ng_bands"]
-                or next_band in m["ng_bands"]
-            ):
-                continue
+    return day_shift, infeasible_bands, band_scores
 
-            # NG判定②：LINEで指定されたNG時間に被っているか
-            if has_time_conflict(band_times[band], m, day_num):
-                continue
 
-            # 卓優先度計算
-            priority_desk = -m["count"] * 10
-            if band in m.get("req_bands", []):
-                priority_desk += 100
-            priority_desk += m["skill_desk"]
-            
-            # 連続性ボーナス：前のバンドで割り当てられた人を優先
-            if m["name"] in prev_assigned:
-                priority_desk += CONTINUITY_BONUS
+def _candidate_quality(infeasible_count, band_scores, members):
+    """
+    候補案の良さを比較するためのスコア（小さいほど良い）
+    1) 成立しなかったバンド数が少ない方が良い
+    2) 卓+ステージの合計スコアがバンド間で均されている方が良い（標準偏差が小さい）
+    3) メンバー間の配置回数の偏りが少ない方が良い（標準偏差が小さい）
+    """
+    balance = statistics.pstdev(band_scores) if len(band_scores) > 1 else 0.0
+    counts = [m["count"] for m in members]
+    fairness = statistics.pstdev(counts) if len(counts) > 1 else 0.0
+    return (infeasible_count, balance, fairness)
 
-            candidate = m.copy()
-            candidate["priority_desk"] = priority_desk
-            available_desk.append(candidate)
 
-        available_desk.sort(key=lambda x: x["priority_desk"], reverse=True)
+def generate_pa_shift(timetable, members_data, day_num=None, config=None):
+    """
+    PAシフトを作成する関数（v3）
+    - NG時間は部分一致（1分でも被れば除外）で判定
+    - 優先度にランダムな揺らぎを加えた複数パターンを生成し、
+      「成立バンド数が多い」→「卓+ステージ合計スコアの均一性が高い」→「配置回数の公平性が高い」
+      の順で最も良い案を採用する
+    """
+    if config is None:
+        config = {"desk_score_threshold": DESK_SCORE_THRESHOLD, "stage_score_threshold": STAGE_SCORE_THRESHOLD}
 
-        for m in available_desk:
-            if desk_score < DESK_SCORE_THRESHOLD:
-                desk_team.append(m)
-                desk_score += m["skill_desk"]
+    band_order, _ = _band_order_and_times(timetable)
+    num_bands = len(band_order)
+    num_members = len(members_data)
+    shift_limit = (num_bands * 4) / num_members if num_members > 0 else float("inf")
 
-        # ステージチーム編成
-        available_stage = []
-        desk_team_names = [m["name"] for m in desk_team]
-        for m in members:
-            if m["name"] in desk_team_names:  # すでに卓に割り当てられたメンバーは除く
-                continue
-            
-            # 上限チェック：仕事回数が上限に達していないか
-            if m["count"] >= shift_limit:
-                continue
+    rng = random.Random()
+    candidate_count = config.get("candidate_count", DEFAULT_CANDIDATE_COUNT)
 
-            # NG判定①：自分が出演するバンド、またはその「前後」ならシフト不可
-            if (
-                band in m["ng_bands"]
-                or prev_band in m["ng_bands"]
-                or next_band in m["ng_bands"]
-            ):
-                continue
+    best = None
+    for i in range(candidate_count):
+        members_state = normalize_members(copy.deepcopy(members_data))
+        grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int)}
+        candidate_rng = _ZERO_JITTER if i == 0 else rng
 
-            # NG判定②：LINEで指定されたNG時間に被っているか
-            if has_time_conflict(band_times[band], m, day_num):
-                continue
+        day_shift, infeasible_bands, band_scores = _run_day_core(
+            timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num
+        )
+        quality = _candidate_quality(len(infeasible_bands), band_scores, members_state)
+        if best is None or quality < best[0]:
+            best = (quality, day_shift, members_state, infeasible_bands)
 
-            # ステージ優先度計算
-            priority_stage = -m["count"] * 10
-            if band in m.get("req_bands", []):
-                priority_stage += 100
-            priority_stage += m["skill_stage"]
-            
-            # 連続性ボーナス：前のバンドで割り当てられた人を優先
-            if m["name"] in prev_assigned:
-                priority_stage += CONTINUITY_BONUS
-
-            candidate = m.copy()
-            candidate["priority_stage"] = priority_stage
-            available_stage.append(candidate)
-
-        available_stage.sort(key=lambda x: x["priority_stage"], reverse=True)
-
-        for m in available_stage:
-            if stage_score < STAGE_SCORE_THRESHOLD:
-                stage_team.append(m)
-                stage_score += m["skill_stage"]
-
-        # 3. 結果の保存とカウント更新（2枠セットで1カウント）
-        shift_result[band] = {
-            "卓": [m["name"] for m in desk_team],
-            "ステージ": [m["name"] for m in stage_team],
-        }
-
-        assigned_names = [m["name"] for m in desk_team + stage_team]
-        for m in members:
-            if m["name"] in assigned_names:
-                m["count"] += 1
-
-        if desk_score < DESK_SCORE_THRESHOLD or stage_score < STAGE_SCORE_THRESHOLD:
-            infeasible_bands.append(
-                {
-                    "band": band,
-                    "desk_score": desk_score,
-                    "stage_score": stage_score,
-                    "desk_required": DESK_SCORE_THRESHOLD,
-                    "stage_required": STAGE_SCORE_THRESHOLD,
-                }
-            )
-
-    return shift_result, members, infeasible_bands
+    _, day_shift, members_state, infeasible_bands = best
+    return day_shift, members_state, infeasible_bands
 
 
 def generate_timetable_multi_day(timetable_config):
@@ -364,25 +594,52 @@ def generate_timetable_multi_day(timetable_config):
     return result
 
 
-def generate_pa_shift_multi_day(timetable_multi, members_data):
+def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
     """
-    複数日のシフトを生成する関数
+    複数日のシフトを生成する関数（v3）
+    - ng_times は日別dictのまま非破壊で参照する（2日目以降もNG時間が正しく効く）
+    - 配置回数の上限（shift_limit）・個人/学年別の配置上限は「全日程を通じた合計」で管理する
+    - 優先度にランダムな揺らぎを加えた複数パターンを全日程分通しで生成し、最も良い案を採用する
     """
-    members = copy.deepcopy(members_data)
-    shift_result = {}
-    infeasible_days = {}
+    if config is None:
+        config = {"desk_score_threshold": DESK_SCORE_THRESHOLD, "stage_score_threshold": STAGE_SCORE_THRESHOLD}
 
-    for day_key, timetable in sorted(timetable_multi.items(), key=lambda item: day_sort_key(item[0])):
-        # 日番号を抽出
-        day_num = day_sort_key(day_key)
+    sorted_days = sorted(timetable_multi.items(), key=lambda item: day_sort_key(item[0]))
 
-        # その日のシフトを生成（ng_timesは破壊的に上書きしない）
-        day_shift, members, infeasible_bands = generate_pa_shift(timetable, members, day_num=day_num)
-        shift_result[day_key] = day_shift
-        if infeasible_bands:
-            infeasible_days[day_key] = infeasible_bands
+    total_bands = sum(len(_band_order_and_times(timetable)[0]) for _, timetable in sorted_days)
+    num_members = len(members_data)
+    shift_limit = (total_bands * 4) / num_members if num_members > 0 else float("inf")
 
-    return shift_result, members, infeasible_days
+    rng = random.Random()
+    candidate_count = config.get("candidate_count", DEFAULT_CANDIDATE_COUNT)
+
+    best = None
+    for i in range(candidate_count):
+        members_state = normalize_members(copy.deepcopy(members_data))
+        grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int)}
+        candidate_rng = _ZERO_JITTER if i == 0 else rng
+
+        shift_result = {}
+        infeasible_days = {}
+        all_band_scores = []
+
+        for day_key, timetable in sorted_days:
+            day_num = day_sort_key(day_key)
+            day_shift, infeasible_bands, band_scores = _run_day_core(
+                timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num
+            )
+            shift_result[day_key] = day_shift
+            all_band_scores.extend(band_scores)
+            if infeasible_bands:
+                infeasible_days[day_key] = infeasible_bands
+
+        total_infeasible = sum(len(v) for v in infeasible_days.values())
+        quality = _candidate_quality(total_infeasible, all_band_scores, members_state)
+        if best is None or quality < best[0]:
+            best = (quality, shift_result, members_state, infeasible_days)
+
+    _, shift_result, members_state, infeasible_days = best
+    return shift_result, members_state, infeasible_days
 
 
 def create_excel_workbook(timetable_multi, shift_result, members):
@@ -446,7 +703,7 @@ def create_excel_workbook(timetable_multi, shift_result, members):
     ws_summary = wb.create_sheet("全体集計", 0)
 
     # 集計ヘッダー
-    summary_headers = ["メンバー名", "シフト回数"]
+    summary_headers = ["メンバー名", "学年", "シフト回数", "卓回数", "ステージ回数"]
     for col, header in enumerate(summary_headers, 1):
         cell = ws_summary.cell(row=1, column=col)
         cell.value = header
@@ -460,7 +717,13 @@ def create_excel_workbook(timetable_multi, shift_result, members):
 
     # データ行
     for row, member in enumerate(sorted_members, 2):
-        member_data = [member["name"], member["count"]]
+        member_data = [
+            member["name"],
+            member.get("grade") if member.get("grade") is not None else "-",
+            member["count"],
+            member.get("desk_count", "-"),
+            member.get("stage_count", "-"),
+        ]
         for col, value in enumerate(member_data, 1):
             cell = ws_summary.cell(row=row, column=col)
             cell.value = value
@@ -468,22 +731,12 @@ def create_excel_workbook(timetable_multi, shift_result, members):
             cell.alignment = Alignment(horizontal="left", vertical="center")
 
     ws_summary.column_dimensions['A'].width = 20
-    ws_summary.column_dimensions['B'].width = 15
+    ws_summary.column_dimensions['B'].width = 10
+    ws_summary.column_dimensions['C'].width = 12
+    ws_summary.column_dimensions['D'].width = 12
+    ws_summary.column_dimensions['E'].width = 14
 
     return wb
-
-
-def check_ng_time_for_day(ng_times_per_day, day_num, time_slot):
-    """
-    指定された日のNG時間内にタイムスロットが含まれているかチェック
-    ng_times_per_day: {"day_1": ["11:30-12:00", "13:00-14:00"], ...}
-    day_num: 日番号（1, 2, ...）
-    time_slot: 時間スロット（"11:30-12:00"）
-    """
-    day_key = f"day_{day_num}"
-    if day_key not in ng_times_per_day:
-        return False
-    return any(has_time_overlap(time_slot, ng_slot) for ng_slot in ng_times_per_day[day_key])
 
 
 
@@ -510,17 +763,25 @@ def api_generate_shift_multi_day():
         if members_error:
             return jsonify({"error": members_error}), 400
 
+        # 詳細設定（スコア基準・人数上限・個人/学年別の配置上限など、すべて任意）の取得
+        config, config_error = parse_shift_config(data)
+        if config_error:
+            return jsonify({"error": config_error}), 400
+
         # 複数日タイムテーブル生成
         timetable_multi = generate_timetable_multi_day({"num_days": num_days, "days": days})
 
         # 複数日シフト生成
-        shift_result, updated_members, infeasible_days = generate_pa_shift_multi_day(timetable_multi, members)
+        shift_result, updated_members, infeasible_days = generate_pa_shift_multi_day(timetable_multi, members, config)
         if infeasible_days:
             return (
                 jsonify(
                     {
-                        "error": "条件を満たすシフトを生成できませんでした",
+                        "error": "条件を満たすシフトを生成できませんでした（成立しなかったバンドがあります。詳細は infeasible_days を確認してください）",
                         "infeasible_days": infeasible_days,
+                        "timetable_multi": timetable_multi,
+                        "shift": shift_result,
+                        "members": updated_members,
                     }
                 ),
                 400,
@@ -601,6 +862,11 @@ def api_generate_shift():
         if members_error:
             return jsonify({"error": members_error}), 400
 
+        # 詳細設定（スコア基準・人数上限・個人/学年別の配置上限など、すべて任意）の取得
+        config, config_error = parse_shift_config(data)
+        if config_error:
+            return jsonify({"error": config_error}), 400
+
         # breakInfoの組み立て
         break_info = None
         if break_after_band:
@@ -610,13 +876,16 @@ def api_generate_shift():
         timetable = generate_timetable(start_time, bands, rh_mins, act_mins, break_info)
 
         # シフト生成
-        shift_result, updated_members, infeasible_bands = generate_pa_shift(timetable, members)
+        shift_result, updated_members, infeasible_bands = generate_pa_shift(timetable, members, config=config)
         if infeasible_bands:
             return (
                 jsonify(
                     {
-                        "error": "条件を満たすシフトを生成できませんでした",
+                        "error": "条件を満たすシフトを生成できませんでした（成立しなかったバンドがあります。詳細は infeasible_bands を確認してください）",
                         "infeasible_bands": infeasible_bands,
+                        "timetable": timetable,
+                        "shift": shift_result,
+                        "members": updated_members,
                     }
                 ),
                 400,

@@ -1,53 +1,32 @@
 {
-  "num_days": 2,
+  "num_days": 1,
   "days": [
     {
       "day_number": 1,
       "start_time": "11:30",
       "bands": [
-        "day1_band1",
-        "day1_band2",
-        "day1_band3"
+        "band1",
+        "band2",
+        "band3"
       ],
       "rh_mins": 15,
       "act_mins": 10,
       "break_duration": 50,
-      "break_after_band": "day1_band2"
-    },
-    {
-      "day_number": 2,
-      "start_time": "12:00",
-      "bands": [
-        "day2_band1",
-        "day2_band2"
-      ],
-      "rh_mins": 20,
-      "act_mins": 10,
-      "break_duration": 40,
-      "break_after_band": "day2_band1"
+      "break_after_band": "band2"
     }
   ],
   "members": [
     {
       "name": "みらい",
-      "grade": "2",
+      "grade": "1",
       "skill_desk": 5,
       "skill_stage": 4,
       "count": 0,
-      "ng_bands": [
-        "day1_band1"
-      ],
+      "ng_bands": [],
       "ng_times": {
-        "day_1": [
-          "11:30-11:45"
-        ],
-        "day_2": [
-          "12:00-12:20"
-        ]
+        "day_1": []
       },
-      "req_bands": [
-        "day2_band2"
-      ]
+      "req_bands": []
     },
     {
       "name": "るい",
@@ -57,23 +36,19 @@
       "count": 0,
       "ng_bands": [],
       "ng_times": {
-        "day_1": [
-          "12:20-13:10"
-        ],
-        "day_2": []
+        "day_1": []
       },
       "req_bands": []
     },
     {
       "name": "先輩A",
-      "grade": "3",
+      "grade": "2",
       "skill_desk": 5,
       "skill_stage": 5,
       "count": 0,
       "ng_bands": [],
       "ng_times": {
-        "day_1": [],
-        "day_2": []
+        "day_1": []
       },
       "req_bands": []
     },
@@ -83,18 +58,23 @@
       "skill_desk": 2,
       "skill_stage": 2,
       "count": 0,
-      "ng_bands": [
-        "day2_band1"
-      ],
+      "ng_bands": [],
       "ng_times": {
-        "day_1": [],
-        "day_2": [
-          "12:30-13:00"
-        ]
+        "day_1": []
       },
-      "req_bands": [
-        "day1_band3"
-      ]
+      "req_bands": []
+    },
+    {
+      "name": "先輩C",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
     }
   ],
   "desk_score_threshold": 5,
@@ -103,8 +83,6 @@
   "stage_max_members": null,
   "desk_limit_per_member": null,
   "stage_limit_per_member": null,
-  "grade_limits": {
-    "1": { "desk_max": 3, "stage_max": 3 }
-  },
+  "grade_limits": {},
   "candidate_count": 12
 }

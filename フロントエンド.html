@@ -394,6 +394,68 @@
                     <div id="dayContents"></div>
                 </div>
 
+                <!-- 詳細設定（任意） -->
+                <details style="margin-top: 30px; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">⚙️ 詳細設定（任意・省略可）</summary>
+
+                    <div class="comment" style="margin-top: 15px;">
+                        <strong>💡 詳細設定について:</strong>
+                        すべて省略可能です。空欄のままなら従来通りの動作になります。
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>🎚️ 卓に必要な合計スキルスコア</label>
+                            <input type="number" id="deskScoreThreshold" min="0" placeholder="デフォルト: 5">
+                        </div>
+                        <div class="form-group">
+                            <label>🎤 ステージに必要な合計スキルスコア</label>
+                            <input type="number" id="stageScoreThreshold" min="0" placeholder="デフォルト: 3">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>👥 卓の人数上限（1バンドあたり）</label>
+                            <input type="number" id="deskMaxMembers" min="0" placeholder="無制限">
+                        </div>
+                        <div class="form-group">
+                            <label>👥 ステージの人数上限（1バンドあたり）</label>
+                            <input type="number" id="stageMaxMembers" min="0" placeholder="無制限">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>🙋 個人の卓配置回数上限（全日程合計）</label>
+                            <input type="number" id="deskLimitPerMember" min="0" placeholder="無制限">
+                        </div>
+                        <div class="form-group">
+                            <label>🙋 個人のステージ配置回数上限（全日程合計）</label>
+                            <input type="number" id="stageLimitPerMember" min="0" placeholder="無制限">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🔀 生成パターン数（多いほど良い組み合わせを探索・最大50）</label>
+                        <input type="number" id="candidateCount" min="1" max="50" placeholder="デフォルト: 12">
+                    </div>
+
+                    <div class="form-group">
+                        <label>🎓 学年ごとの配置回数上限（全日程合計）</label>
+                        <div id="gradeLimitsContainer" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa;">
+                            <p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                            <input type="text" id="gradeLimitGrade" placeholder="学年（例：1）" style="flex: 1; min-width: 100px;">
+                            <input type="number" id="gradeLimitDeskMax" placeholder="卓の上限" style="flex: 1; min-width: 100px;" min="0">
+                            <input type="number" id="gradeLimitStageMax" placeholder="ステージの上限" style="flex: 1; min-width: 100px;" min="0">
+                            <button type="button" class="btn-secondary" onclick="addGradeLimit()">+ 追加</button>
+                        </div>
+                        <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージどちらか一方だけの指定も可能です（メンバーに「学年」を設定した場合のみ有効）</p>
+                    </div>
+                </details>
+
                 <!-- ナビゲーションボタン -->
                 <div class="button-group">
                     <button type="button" class="btn-primary" onclick="goToPage(2)">
@@ -417,9 +479,15 @@
 
             <form id="memberForm">
                 <!-- メンバー追加セクション -->
-                <div class="form-group">
-                    <label>👤 メンバー名</label>
-                    <input type="text" id="memberName" placeholder="例：みらい">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>👤 メンバー名</label>
+                        <input type="text" id="memberName" placeholder="例：みらい">
+                    </div>
+                    <div class="form-group">
+                        <label>🎓 学年（任意）</label>
+                        <input type="text" id="memberGrade" placeholder="例：1">
+                    </div>
                 </div>
 
                 <div class="grid-2">
@@ -452,9 +520,14 @@
                     </div>
                 </div>
 
-                <button type="button" class="btn-secondary" onclick="addMember()">
-                    + メンバーを追加
-                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-secondary" id="memberSubmitBtn" onclick="addMember()">
+                        + メンバーを追加
+                    </button>
+                    <button type="button" class="btn-secondary" id="memberCancelEditBtn" style="display: none;" onclick="cancelEditMember()">
+                        ✕ 編集をキャンセル
+                    </button>
+                </div>
             </form>
 
             <!-- 追加されたメンバー一覧 -->
@@ -498,6 +571,9 @@
                 </div>
             </div>
 
+            <!-- 警告表示（成立しなかったバンドがある場合。プレビュー自体は下に表示され続けます） -->
+            <div id="shiftErrorBox" style="display: none; background: #fff8e1; border-left: 4px solid #ffa000; color: #8a5a00; padding: 15px; border-radius: 8px; margin-bottom: 20px; white-space: pre-line; font-size: 13px; line-height: 1.6;"></div>
+
             <!-- シフト結果タブ -->
             <div id="shiftTabsContainer"></div>
 
@@ -512,12 +588,15 @@
                     <thead>
                         <tr>
                             <th>メンバー名</th>
+                            <th>学年</th>
                             <th>シフト回数</th>
+                            <th>卓回数</th>
+                            <th>ステージ回数</th>
                         </tr>
                     </thead>
                     <tbody id="memberCountBody">
                         <tr>
-                            <td colspan="2" style="text-align: center; color: #999; padding: 30px;">
+                            <td colspan="5" style="text-align: center; color: #999; padding: 30px;">
                                 シフト回数のデータが表示されます
                             </td>
                         </tr>
@@ -546,9 +625,14 @@
             numDays: 1,
             days: [],
             members: [],
+            gradeLimits: {}, // { "1": { desk_max: 8, stage_max: 6 }, ... }
             generatedTimetableMulti: null,
-            generatedShift: null
+            generatedShift: null,
+            infeasibleByDay: {} // { "day_1": [ {band, desk_score, stage_score, ...}, ... ], ... }
         };
+
+        // メンバー編集中の場合、そのメンバーの id を保持する（null なら新規追加モード）
+        let editingMemberId = null;
         const API_BASE_CANDIDATES = [
             'http://127.0.0.1:5000',
             'http://localhost:5000'
@@ -603,6 +687,8 @@
             return data.members.map(member => ({
                 id: Date.now() + Math.floor(Math.random() * 100000),
                 name: member.name || '',
+                grade: (member.grade !== undefined && member.grade !== null && member.grade !== '')
+                    ? String(member.grade) : null,
                 skill_desk: parseInt(member.skill_desk) || 3,
                 skill_stage: parseInt(member.skill_stage) || 3,
                 count: parseInt(member.count) || 0,
@@ -612,6 +698,26 @@
                     : ((member.ng_times && typeof member.ng_times === 'object') ? member.ng_times : {}),
                 req_bands: Array.isArray(member.req_bands) ? member.req_bands : []
             }));
+        }
+
+        function normalizeConfigFromJson(data) {
+            const setInputValue = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.value = (value === undefined || value === null) ? '' : value;
+            };
+
+            setInputValue('deskScoreThreshold', data.desk_score_threshold);
+            setInputValue('stageScoreThreshold', data.stage_score_threshold);
+            setInputValue('deskMaxMembers', data.desk_max_members);
+            setInputValue('stageMaxMembers', data.stage_max_members);
+            setInputValue('deskLimitPerMember', data.desk_limit_per_member);
+            setInputValue('stageLimitPerMember', data.stage_limit_per_member);
+            setInputValue('candidateCount', data.candidate_count);
+
+            appData.gradeLimits = (data.grade_limits && typeof data.grade_limits === 'object')
+                ? JSON.parse(JSON.stringify(data.grade_limits))
+                : {};
+            renderGradeLimits();
         }
 
         function applyImportedInputData(data) {
@@ -626,6 +732,8 @@
 
             const importedMembers = normalizeMembersFromJson(data);
             appData.members = importedMembers;
+
+            normalizeConfigFromJson(data);
 
             // 以前の生成結果はクリア
             appData.generatedTimetableMulti = null;
@@ -899,6 +1007,64 @@
             }
         }
 
+        // 学年ごとの配置回数上限（詳細設定）
+        function renderGradeLimits() {
+            const container = document.getElementById('gradeLimitsContainer');
+            if (!container) return;
+
+            const grades = Object.keys(appData.gradeLimits);
+            if (grades.length === 0) {
+                container.innerHTML = '<p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>';
+                return;
+            }
+
+            container.innerHTML = grades.map(grade => {
+                const limits = appData.gradeLimits[grade] || {};
+                const deskMax = (limits.desk_max === undefined || limits.desk_max === null) ? '無制限' : `${limits.desk_max} 回`;
+                const stageMax = (limits.stage_max === undefined || limits.stage_max === null) ? '無制限' : `${limits.stage_max} 回`;
+                return `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee;">
+                        <span>🎓 <strong>${grade}</strong> ： 卓 ${deskMax} / ステージ ${stageMax}</span>
+                        <button type="button" class="btn-secondary" style="padding: 6px 14px;" onclick="removeGradeLimit('${grade}')">🗑️ 削除</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addGradeLimit() {
+            const gradeInput = document.getElementById('gradeLimitGrade');
+            const deskInput = document.getElementById('gradeLimitDeskMax');
+            const stageInput = document.getElementById('gradeLimitStageMax');
+
+            const grade = gradeInput.value.trim();
+            if (!grade) {
+                alert('学年を入力してください');
+                return;
+            }
+
+            const limits = {};
+            if (deskInput.value.trim() !== '') limits.desk_max = parseInt(deskInput.value);
+            if (stageInput.value.trim() !== '') limits.stage_max = parseInt(stageInput.value);
+
+            if (limits.desk_max === undefined && limits.stage_max === undefined) {
+                alert('卓・ステージのどちらか一方の上限を入力してください');
+                return;
+            }
+
+            appData.gradeLimits[grade] = limits;
+
+            gradeInput.value = '';
+            deskInput.value = '';
+            stageInput.value = '';
+
+            renderGradeLimits();
+        }
+
+        function removeGradeLimit(grade) {
+            delete appData.gradeLimits[grade];
+            renderGradeLimits();
+        }
+
         // ページ2: メンバー管理
         function updateMemberNgTimesUI() {
             const container = document.getElementById('memberNgTimesContainer');
@@ -924,6 +1090,7 @@
 
         function addMember() {
             const name = document.getElementById('memberName').value.trim();
+            const gradeValue = document.getElementById('memberGrade').value.trim();
             const skillDesk = parseInt(document.getElementById('skillDesk').value) || 3;
             const skillStage = parseInt(document.getElementById('skillStage').value) || 3;
 
@@ -953,39 +1120,116 @@
                 return;
             }
 
-            const member = {
-                id: Date.now(),
-                name: name,
-                skill_desk: skillDesk,
-                skill_stage: skillStage,
-                count: 0,
-                ng_bands: ngBands,
-                ng_times: ngTimesPerDay,
-                req_bands: reqBands
-            };
+            if (editingMemberId !== null) {
+                // 既存メンバーを更新（id と count は維持する）
+                const index = appData.members.findIndex(m => m.id === editingMemberId);
+                if (index !== -1) {
+                    appData.members[index] = {
+                        ...appData.members[index],
+                        name: name,
+                        grade: gradeValue || null,
+                        skill_desk: skillDesk,
+                        skill_stage: skillStage,
+                        ng_bands: ngBands,
+                        ng_times: ngTimesPerDay,
+                        req_bands: reqBands
+                    };
+                }
+                editingMemberId = null;
+            } else {
+                // 新規追加
+                const member = {
+                    id: Date.now(),
+                    name: name,
+                    grade: gradeValue || null,
+                    skill_desk: skillDesk,
+                    skill_stage: skillStage,
+                    count: 0,
+                    ng_bands: ngBands,
+                    ng_times: ngTimesPerDay,
+                    req_bands: reqBands
+                };
+                appData.members.push(member);
+            }
 
-            appData.members.push(member);
+            resetMemberForm();
+            renderMembersList();
+            updateMemberNgTimesUI();
+        }
 
+        // 登録済みメンバーの内容をフォームに読み込み、編集モードにする
+        function startEditMember(memberId) {
+            const member = appData.members.find(m => m.id === memberId);
+            if (!member) return;
+
+            // メンバー設定ページに切り替える（バンド選択肢・NG時間UIが最新化される）
+            goToPage(2);
+
+            editingMemberId = memberId;
+
+            document.getElementById('memberName').value = member.name || '';
+            document.getElementById('memberGrade').value = member.grade || '';
+            document.getElementById('skillDesk').value = member.skill_desk;
+            document.getElementById('skillStage').value = member.skill_stage;
+
+            document.querySelectorAll('.ng-band-checkbox').forEach(checkbox => {
+                checkbox.checked = member.ng_bands.includes(checkbox.value);
+            });
+            document.querySelectorAll('.req-band-checkbox').forEach(checkbox => {
+                checkbox.checked = member.req_bands.includes(checkbox.value);
+            });
+
+            const ngTimesByDay = Array.isArray(member.ng_times)
+                ? { day_1: member.ng_times }
+                : (member.ng_times || {});
+            for (let i = 0; i < appData.numDays; i++) {
+                const input = document.getElementById(`ngTimes${i}`);
+                if (input) {
+                    const times = ngTimesByDay[`day_${i + 1}`] || [];
+                    input.value = times.join(',');
+                }
+            }
+
+            const submitBtn = document.getElementById('memberSubmitBtn');
+            if (submitBtn) submitBtn.textContent = '✅ メンバーを更新';
+            const cancelBtn = document.getElementById('memberCancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        }
+
+        // 編集モードを解除してフォームを空に戻す（保存はしない）
+        function cancelEditMember() {
+            editingMemberId = null;
+            resetMemberForm();
+        }
+
+        function resetMemberForm() {
             document.getElementById('memberName').value = '';
+            document.getElementById('memberGrade').value = '';
             document.getElementById('skillDesk').value = '3';
             document.getElementById('skillStage').value = '3';
-            
-            // チェックボックスをリセット
+
             document.querySelectorAll('.ng-band-checkbox, .req-band-checkbox').forEach(checkbox => {
                 checkbox.checked = false;
             });
-            
+
             for (let i = 0; i < appData.numDays; i++) {
                 const input = document.getElementById(`ngTimes${i}`);
                 if (input) input.value = '';
             }
 
-            renderMembersList();
-            updateMemberNgTimesUI();
+            const submitBtn = document.getElementById('memberSubmitBtn');
+            if (submitBtn) submitBtn.textContent = '+ メンバーを追加';
+            const cancelBtn = document.getElementById('memberCancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
         }
 
         function removeMember(memberId) {
             appData.members = appData.members.filter(m => m.id !== memberId);
+            if (editingMemberId === memberId) {
+                // 編集中だったメンバーが削除された場合はフォームをリセットする
+                editingMemberId = null;
+                resetMemberForm();
+            }
             renderMembersList();
         }
 
@@ -1008,17 +1252,21 @@
 
                 return `
                     <div class="member-card">
-                        <h3>${member.name}</h3>
+                        <h3>${member.name}${member.grade ? `<span style="font-size: 12px; color: #667eea; font-weight: 600; margin-left: 8px;">🎓 ${member.grade}</span>` : ''}</h3>
                         <div class="member-info">
                             <div><strong>卓スキル:</strong> ${member.skill_desk}/5</div>
                             <div><strong>ステージスキル:</strong> ${member.skill_stage}/5</div>
                             <div><strong>NG バンド:</strong> ${member.ng_bands.length > 0 ? member.ng_bands.join(', ') : 'なし'}</div>
                             <div><strong>NG 時間:</strong> ${ngTimesDisplay || 'なし'}</div>
                             <div><strong>希望バンド:</strong> ${member.req_bands.length > 0 ? member.req_bands.join(', ') : 'なし'}</div>
-                            <button type="button" class="btn-secondary" onclick="removeMember(${member.id})" 
-                                style="grid-column: 1/-1; margin-top: 10px;">
-                                🗑️ 削除
-                            </button>
+                            <div style="grid-column: 1/-1; margin-top: 10px; display: flex; gap: 10px;">
+                                <button type="button" class="btn-secondary" onclick="startEditMember(${member.id})" style="flex: 1;">
+                                    ✏️ 編集
+                                </button>
+                                <button type="button" class="btn-secondary" onclick="removeMember(${member.id})" style="flex: 1;">
+                                    🗑️ 削除
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1040,6 +1288,85 @@
         });
 
         // ページ3: シフト生成・プレビュー
+
+        // 詳細設定（任意項目）をペイロード用オブジェクトにまとめる
+        function collectAdvancedConfig() {
+            const config = {};
+            const getValue = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.value.trim() : '';
+            };
+
+            const deskScoreThreshold = getValue('deskScoreThreshold');
+            if (deskScoreThreshold !== '') config.desk_score_threshold = parseFloat(deskScoreThreshold);
+
+            const stageScoreThreshold = getValue('stageScoreThreshold');
+            if (stageScoreThreshold !== '') config.stage_score_threshold = parseFloat(stageScoreThreshold);
+
+            const deskMaxMembers = getValue('deskMaxMembers');
+            if (deskMaxMembers !== '') config.desk_max_members = parseInt(deskMaxMembers);
+
+            const stageMaxMembers = getValue('stageMaxMembers');
+            if (stageMaxMembers !== '') config.stage_max_members = parseInt(stageMaxMembers);
+
+            const deskLimitPerMember = getValue('deskLimitPerMember');
+            if (deskLimitPerMember !== '') config.desk_limit_per_member = parseInt(deskLimitPerMember);
+
+            const stageLimitPerMember = getValue('stageLimitPerMember');
+            if (stageLimitPerMember !== '') config.stage_limit_per_member = parseInt(stageLimitPerMember);
+
+            const candidateCount = getValue('candidateCount');
+            if (candidateCount !== '') config.candidate_count = parseInt(candidateCount);
+
+            if (Object.keys(appData.gradeLimits).length > 0) {
+                config.grade_limits = appData.gradeLimits;
+            }
+
+            return config;
+        }
+
+        // 成立しなかった原因（reason）をわかりやすい文字列に整形
+        function formatInfeasibleReason(entry) {
+            if (entry.reason) return entry.reason;
+            return `卓スコア ${entry.desk_score}/${entry.desk_required}、ステージスコア ${entry.stage_score}/${entry.stage_required}`;
+        }
+
+        function showShiftError(data, fallbackMessage) {
+            const box = document.getElementById('shiftErrorBox');
+            if (!box) return;
+
+            const hasPreview = !!(data && data.timetable_multi);
+            const lines = [`⚠️ ${(data && data.error) || fallbackMessage || '一部のバンドが基準を満たせませんでした'}`];
+            if (hasPreview) {
+                lines.push('下のプレビューに、埋まった範囲の結果を表示しています。⚠️ の付いたバンド・セルが基準を満たせなかった箇所です。');
+            }
+
+            if (data && data.infeasible_days) {
+                for (const [dayKey, bands] of Object.entries(data.infeasible_days)) {
+                    const dayNum = dayKey.split('_')[1] || dayKey;
+                    lines.push(`\n【${dayNum}日目で成立しなかったバンド】`);
+                    bands.forEach(b => lines.push(`・${b.band} → ${formatInfeasibleReason(b)}`));
+                }
+            } else if (data && data.infeasible_bands) {
+                lines.push('\n【成立しなかったバンド】');
+                data.infeasible_bands.forEach(b => lines.push(`・${b.band} → ${formatInfeasibleReason(b)}`));
+            }
+
+            box.textContent = lines.join('\n');
+            box.style.display = 'block';
+        }
+
+        function hideShiftError() {
+            const box = document.getElementById('shiftErrorBox');
+            if (box) {
+                box.style.display = 'none';
+                box.textContent = '';
+            }
+        }
+
+        // Python バックエンドを呼び出す
+        // 戻り値: { ok: boolean, data: object|null }
+        // ネットワークエラー（サーバー未起動等）はここで alert し、それ以外のエラー（400/500の詳細）は data として返す
         async function callPythonBackend(payload) {
             try {
                 const response = await fetchWithApiFallback('/api/generate-shift-multi-day', {
@@ -1050,20 +1377,18 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) {
-                    let errorMessage = `HTTP error! status: ${response.status}`;
-                    try {
-                        const errorData = await response.json();
-                        if (errorData && errorData.error) {
-                            errorMessage = errorData.error;
-                        }
-                    } catch (parseError) {
-                        // JSONでないレスポンスは既定メッセージのまま
-                    }
-                    throw new Error(errorMessage);
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    data = null;
                 }
 
-                return await response.json();
+                if (!response.ok) {
+                    return { ok: false, data };
+                }
+
+                return { ok: true, data };
             } catch (error) {
                 console.error('Python バックエンド通信エラー:', error);
                 const isNetworkError =
@@ -1075,7 +1400,7 @@
                 } else {
                     alert(`シフト生成エラー: ${error.message}`);
                 }
-                return null;
+                return { ok: false, data: null };
             }
         }
 
@@ -1102,7 +1427,9 @@
                 return;
             }
 
-            // Python バックエンドへのペイロード構築
+            hideShiftError();
+
+            // Python バックエンドへのペイロード構築（詳細設定は任意項目として展開する）
             const payload = {
                 num_days: appData.numDays,
                 days: appData.days.map(day => ({
@@ -1114,7 +1441,8 @@
                     break_duration: day.breakDuration,
                     break_after_band: day.breakAfterBand
                 })),
-                members: appData.members
+                members: appData.members,
+                ...collectAdvancedConfig()
             };
 
             console.log('Payload:', JSON.stringify(payload, null, 2));
@@ -1122,14 +1450,30 @@
             // Python API を呼び出し
             const result = await callPythonBackend(payload);
 
-            if (!result) {
+            if (!result.ok) {
+                if (result.data) {
+                    // 成立しなかった原因を表示しつつ、埋まった範囲の結果はそのままプレビューし続ける（止めない）
+                    appData.infeasibleByDay = result.data.infeasible_days || {};
+                    showShiftError(result.data);
+                    if (result.data.timetable_multi) appData.generatedTimetableMulti = result.data.timetable_multi;
+                    if (result.data.shift) appData.generatedShift = result.data.shift;
+                    if (result.data.members) appData.members = result.data.members;
+                    if (appData.generatedTimetableMulti) {
+                        updateSummary();
+                        displayShiftResults();
+                    }
+                } else {
+                    appData.infeasibleByDay = {};
+                }
                 return;
             }
 
             // 結果を保存
-            appData.generatedTimetableMulti = result.timetable_multi;
-            appData.generatedShift = result.shift;
-            appData.members = result.members;
+            const data = result.data;
+            appData.infeasibleByDay = {};
+            appData.generatedTimetableMulti = data.timetable_multi;
+            appData.generatedShift = data.shift;
+            appData.members = data.members;
 
             // プレビュー表示
             updateSummary();
@@ -1153,15 +1497,24 @@
             const tabs = [];
             const contents = [];
 
+            let hasAnyIssue = false;
+
             for (const dayKey in appData.generatedTimetableMulti) {
                 const dayNum = parseInt(dayKey.split('_')[1]);
                 const timetable = appData.generatedTimetableMulti[dayKey];
                 const shift = appData.generatedShift[dayKey];
 
+                // この日で基準を満たせなかったバンドをバンド名で引けるようにする
+                const infeasibleForDay = {};
+                (appData.infeasibleByDay[dayKey] || []).forEach(entry => {
+                    infeasibleForDay[entry.band] = entry;
+                });
+                if (Object.keys(infeasibleForDay).length > 0) hasAnyIssue = true;
+
                 tabs.push(`
                     <button type="button" class="tab ${dayNum === 1 ? 'active' : ''}" 
                         onclick="switchShiftTab(${dayNum - 1})">
-                        ${dayNum}日目
+                        ${dayNum}日目${infeasibleForDay && Object.keys(infeasibleForDay).length > 0 ? ' ⚠️' : ''}
                     </button>
                 `);
 
@@ -1170,14 +1523,27 @@
                     const desk = assigned["卓"].join('、');
                     const stage = assigned["ステージ"].join('、');
                     const entryType = entry.type === 'rh' ? 'リハ' : entry.type === 'act' ? '本番' : '休憩';
+                    const issue = entry.type !== 'break' ? infeasibleForDay[entry.name] : null;
+
+                    const deskShort = issue && issue.desk_score < issue.desk_required;
+                    const stageShort = issue && issue.stage_score < issue.stage_required;
+
+                    const deskCell = deskShort
+                        ? `<span style="color: #c62828;">${desk || '-'}</span><br><small style="color: #c62828;">⚠️ 卓不足（${issue.desk_score}/${issue.desk_required}）</small>`
+                        : (desk || '-');
+                    const stageCell = stageShort
+                        ? `<span style="color: #c62828;">${stage || '-'}</span><br><small style="color: #c62828;">⚠️ ステージ不足（${issue.stage_score}/${issue.stage_required}）</small>`
+                        : (stage || '-');
+
+                    const rowStyle = issue ? ' style="background: #fff5f5;"' : '';
 
                     return `
-                        <tr>
+                        <tr${rowStyle}>
                             <td>${entry.time}</td>
                             <td>${entryType}</td>
-                            <td>${entry.name}</td>
-                            <td>${desk || '-'}</td>
-                            <td>${stage || '-'}</td>
+                            <td>${entry.name}${issue ? ' ⚠️' : ''}</td>
+                            <td>${deskCell}</td>
+                            <td>${stageCell}</td>
                         </tr>
                     `;
                 }).join('');
@@ -1205,6 +1571,7 @@
             }
 
             container.innerHTML = `
+                ${hasAnyIssue ? '<p style="font-size: 12px; color: #c62828; margin-bottom: 10px;">⚠️ の付いたバンドは卓・ステージのスキル基準を満たせませんでした（担当者不足の可能性があります）。それ以外のバンドは正常に埋まっています。</p>' : ''}
                 <div class="tabs">${tabs.join('')}</div>
                 ${contents.join('')}
             `;
@@ -1227,17 +1594,23 @@
             const countBody = document.getElementById('memberCountBody');
 
             if (!appData.members || appData.members.length === 0) {
-                countBody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: #999; padding: 30px;">メンバーデータがありません</td></tr>';
+                countBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999; padding: 30px;">メンバーデータがありません</td></tr>';
                 return;
             }
 
             const sortedMembers = [...appData.members].sort((a, b) => b.count - a.count);
 
             const rows = sortedMembers.map(member => {
+                const grade = (member.grade !== undefined && member.grade !== null && member.grade !== '') ? member.grade : '-';
+                const deskCount = (member.desk_count !== undefined && member.desk_count !== null) ? `${member.desk_count} 回` : '-';
+                const stageCount = (member.stage_count !== undefined && member.stage_count !== null) ? `${member.stage_count} 回` : '-';
                 return `
                     <tr>
                         <td>${member.name}</td>
+                        <td>${grade}</td>
                         <td style="font-weight: 600; color: #667eea;">${member.count} 回</td>
+                        <td>${deskCount}</td>
+                        <td>${stageCount}</td>
                     </tr>
                 `;
             }).join('');
@@ -1293,6 +1666,7 @@
             updateDayTabs();
             renderMembersList();
             updateMemberNgTimesUI();
+            renderGradeLimits();
         });
     </script>
 </body>
