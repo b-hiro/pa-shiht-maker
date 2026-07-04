@@ -338,6 +338,98 @@
             font-size: 13px;
             color: #666;
         }
+
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .card-header-row h3 {
+            margin-bottom: 0;
+        }
+
+        .icon-btn-group {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .icon-btn {
+            background: #f0f0f0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 15px;
+            padding: 0;
+            transition: background 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: #e0e0e0;
+        }
+
+        /* バンド行（ドラッグして並び替え可能） */
+        .band-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f9f9f9;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .band-row.drag-over {
+            outline: 2px dashed #667eea;
+            outline-offset: -2px;
+        }
+
+        .band-drag-handle {
+            color: #999;
+            font-size: 18px;
+            cursor: grab;
+            user-select: none;
+            line-height: 1;
+        }
+
+        .band-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .band-name {
+            flex: 1;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* NG時間帯（ダイヤル式）の1行分 */
+        .ng-range-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .ng-range-row select {
+            flex: 1;
+            min-width: 60px;
+        }
+
+        .ng-range-separator {
+            color: #666;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -385,7 +477,7 @@
                 <!-- イベント日数設定 -->
                 <div class="form-group">
                     <label>📅 イベント日数</label>
-                    <input type="number" id="numDays" value="1" min="1" max="10" required onchange="updateDayTabs()">
+                    <select id="numDays" required onchange="updateDayTabs()"></select>
                 </div>
 
                 <!-- 日別設定タブ -->
@@ -403,42 +495,37 @@
                         すべて省略可能です。空欄のままなら従来通りの動作になります。
                     </div>
 
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label>🎚️ 卓に必要な合計スキルスコア</label>
-                            <input type="number" id="deskScoreThreshold" min="0" placeholder="デフォルト: 5">
-                        </div>
-                        <div class="form-group">
-                            <label>🎤 ステージに必要な合計スキルスコア</label>
-                            <input type="number" id="stageScoreThreshold" min="0" placeholder="デフォルト: 3">
-                        </div>
+                    <div class="comment" style="margin-top: 0; margin-bottom: 15px;">
+                        <strong>💡 成立条件について:</strong>
+                        卓・ステージとも「スキル3以上のリーダーを最低1名含むこと」が必須です。
+                        リーダーを確保できないバンドは成立不可（エラー）として扱われます。
                     </div>
 
                     <div class="grid-2">
                         <div class="form-group">
-                            <label>👥 卓の人数上限（1バンドあたり）</label>
-                            <input type="number" id="deskMaxMembers" min="0" placeholder="無制限">
+                            <label>👥 卓の人数上限（リーダー含む・1バンドあたり）</label>
+                            <select id="deskMaxMembers"></select>
                         </div>
                         <div class="form-group">
-                            <label>👥 ステージの人数上限（1バンドあたり）</label>
-                            <input type="number" id="stageMaxMembers" min="0" placeholder="無制限">
+                            <label>👥 ステージの人数上限（リーダー含む・1バンドあたり）</label>
+                            <select id="stageMaxMembers"></select>
                         </div>
                     </div>
 
                     <div class="grid-2">
                         <div class="form-group">
                             <label>🙋 個人の卓配置回数上限（全日程合計）</label>
-                            <input type="number" id="deskLimitPerMember" min="0" placeholder="無制限">
+                            <select id="deskLimitPerMember"></select>
                         </div>
                         <div class="form-group">
                             <label>🙋 個人のステージ配置回数上限（全日程合計）</label>
-                            <input type="number" id="stageLimitPerMember" min="0" placeholder="無制限">
+                            <select id="stageLimitPerMember"></select>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label>🔀 生成パターン数（多いほど良い組み合わせを探索・最大50）</label>
-                        <input type="number" id="candidateCount" min="1" max="50" placeholder="デフォルト: 12">
+                        <select id="candidateCount"></select>
                     </div>
 
                     <div class="form-group">
@@ -448,8 +535,8 @@
                         </div>
                         <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
                             <input type="text" id="gradeLimitGrade" placeholder="学年（例：1）" style="flex: 1; min-width: 100px;">
-                            <input type="number" id="gradeLimitDeskMax" placeholder="卓の上限" style="flex: 1; min-width: 100px;" min="0">
-                            <input type="number" id="gradeLimitStageMax" placeholder="ステージの上限" style="flex: 1; min-width: 100px;" min="0">
+                            <select id="gradeLimitDeskMax" style="flex: 1; min-width: 100px;"></select>
+                            <select id="gradeLimitStageMax" style="flex: 1; min-width: 100px;"></select>
                             <button type="button" class="btn-secondary" onclick="addGradeLimit()">+ 追加</button>
                         </div>
                         <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージどちらか一方だけの指定も可能です（メンバーに「学年」を設定した場合のみ有効）</p>
@@ -493,17 +580,29 @@
                 <div class="grid-2">
                     <div class="form-group">
                         <label>🎚️ 卓スキル（1-5）</label>
-                        <input type="number" id="skillDesk" value="3" min="1" max="5" required>
+                        <select id="skillDesk" required>
+                            <option value="1">1（初心者）</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3（標準）</option>
+                            <option value="4">4</option>
+                            <option value="5">5（熟練）</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>🎤 ステージスキル（1-5）</label>
-                        <input type="number" id="skillStage" value="3" min="1" max="5" required>
+                        <select id="skillStage" required>
+                            <option value="1">1（初心者）</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3（標準）</option>
+                            <option value="4">4</option>
+                            <option value="5">5（熟練）</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- 出演禁止バンド（選択肢から選ぶ） -->
+                <!-- 出演バンド（選択肢から選ぶ） -->
                 <div class="form-group">
-                    <label>🚫 出演禁止バンド</label>
+                    <label>🚫 出演バンド</label>
                     <div id="ngBandsCheckboxes" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa; max-height: 150px; overflow-y: auto;">
                         <p style="color: #999; font-size: 13px;">1ページ目で追加したバンドが表示されます</p>
                     </div>
@@ -628,11 +727,92 @@
             gradeLimits: {}, // { "1": { desk_max: 8, stage_max: 6 }, ... }
             generatedTimetableMulti: null,
             generatedShift: null,
-            infeasibleByDay: {} // { "day_1": [ {band, desk_score, stage_score, ...}, ... ], ... }
+            infeasibleByDay: {} // { "day_1": [ {band, desk_has_leader, stage_has_leader, reason, ...}, ... ], ... }
         };
 
         // メンバー編集中の場合、そのメンバーの id を保持する（null なら新規追加モード）
         let editingMemberId = null;
+
+        // ===== 数値入力を選択式（<select>）にするための共通ヘルパー =====
+
+        // start〜end を step 刻みで並べた数値配列を作る
+        function rangeValues(start, end, step) {
+            const values = [];
+            for (let v = start; v <= end; v += step) values.push(v);
+            return values;
+        }
+
+        // 指定した候補値（＋現在値。候補になければ追加）から <option> のHTMLを組み立てる
+        function buildNumberOptions(current, values, emptyLabel) {
+            let html = '';
+            if (emptyLabel !== undefined) {
+                const isEmpty = current === null || current === undefined || current === '';
+                html += `<option value=""${isEmpty ? ' selected' : ''}>${emptyLabel}</option>`;
+            }
+
+            const numericCurrent = (current === null || current === undefined || current === '')
+                ? null : Number(current);
+            const optionValues = new Set(values);
+            if (numericCurrent !== null && !Number.isNaN(numericCurrent)) {
+                optionValues.add(numericCurrent);
+            }
+
+            html += Array.from(optionValues).sort((a, b) => a - b).map(v =>
+                `<option value="${v}"${numericCurrent === v ? ' selected' : ''}>${v}</option>`
+            ).join('');
+            return html;
+        }
+
+        // <select> に値をセットする（候補にない値は一時的に選択肢へ追加してから反映する）
+        function setSelectValue(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const strValue = (value === undefined || value === null || value === '') ? '' : String(value);
+            if (strValue !== '' && !Array.from(el.options).some(opt => opt.value === strValue)) {
+                const opt = document.createElement('option');
+                opt.value = strValue;
+                opt.textContent = strValue;
+                el.appendChild(opt);
+            }
+            el.value = strValue;
+        }
+
+        // ===== 時刻（時・分）を選択式にするための共通ヘルパー =====
+        const NG_TIME_MINUTE_OPTIONS = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+        function hourOptions(current) {
+            let html = '';
+            for (let h = 0; h < 24; h++) {
+                const hh = String(h).padStart(2, '0');
+                html += `<option value="${hh}"${hh === current ? ' selected' : ''}>${hh}</option>`;
+            }
+            return html;
+        }
+
+        function minuteOptions(current) {
+            return NG_TIME_MINUTE_OPTIONS.map(m =>
+                `<option value="${m}"${m === current ? ' selected' : ''}>${m}</option>`
+            ).join('');
+        }
+
+        // "HH:MM" 文字列を { hour, minute } に分解する（分は5分刻みに丸める）
+        function splitTimeValue(value) {
+            if (typeof value === 'string' && /^\d{1,2}:\d{1,2}$/.test(value)) {
+                let [h, m] = value.split(':').map(v => parseInt(v, 10));
+                let roundedMin = Math.round(m / 5) * 5;
+                if (roundedMin >= 60) {
+                    roundedMin = 0;
+                    h = (h + 1) % 24;
+                }
+                return { hour: String(h).padStart(2, '0'), minute: String(roundedMin).padStart(2, '0') };
+            }
+            return { hour: '00', minute: '00' };
+        }
+
+        function combineTimeValue(hour, minute) {
+            return `${hour}:${minute}`;
+        }
+
         const API_BASE_CANDIDATES = [
             'http://127.0.0.1:5000',
             'http://localhost:5000'
@@ -701,13 +881,8 @@
         }
 
         function normalizeConfigFromJson(data) {
-            const setInputValue = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.value = (value === undefined || value === null) ? '' : value;
-            };
+            const setInputValue = setSelectValue;
 
-            setInputValue('deskScoreThreshold', data.desk_score_threshold);
-            setInputValue('stageScoreThreshold', data.stage_score_threshold);
             setInputValue('deskMaxMembers', data.desk_max_members);
             setInputValue('stageMaxMembers', data.stage_max_members);
             setInputValue('deskLimitPerMember', data.desk_limit_per_member);
@@ -728,7 +903,7 @@
 
             appData.days = days;
             appData.numDays = parseInt(data.num_days) || days.length;
-            document.getElementById('numDays').value = appData.numDays;
+            setSelectValue('numDays', appData.numDays);
 
             const importedMembers = normalizeMembersFromJson(data);
             appData.members = importedMembers;
@@ -799,7 +974,7 @@
                 appData.days.flatMap(day => day.bands) : 
                 (appData.timetable?.bands || []);
 
-            // 出演禁止バンドのチェックボックスを生成
+            // 出演バンドのチェックボックスを生成
             const ngBandsContainer = document.getElementById('ngBandsCheckboxes');
             if (bands.length > 0) {
                 ngBandsContainer.innerHTML = bands.map(band => `
@@ -875,28 +1050,38 @@
                 <div class="tab-content ${index === 0 ? 'active' : ''}" id="dayContent${index}">
                     <div class="form-group">
                         <label>🕐 開始時間（${day.dayNumber}日目）</label>
-                        <input type="time" value="${day.startTime}" 
-                            onchange="appData.days[${index}].startTime = this.value">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <select onchange="appData.days[${index}].startTime = combineTimeValue(this.value, splitTimeValue(appData.days[${index}].startTime).minute)">
+                                ${hourOptions(splitTimeValue(day.startTime).hour)}
+                            </select>
+                            <span>：</span>
+                            <select onchange="appData.days[${index}].startTime = combineTimeValue(splitTimeValue(appData.days[${index}].startTime).hour, this.value)">
+                                ${minuteOptions(splitTimeValue(day.startTime).minute)}
+                            </select>
+                        </div>
                     </div>
 
                     <div class="grid-2">
                         <div class="form-group">
                             <label>⏱️ リハーサル時間（分）</label>
-                            <input type="number" value="${day.rehearsalMinutes}" min="1"
-                                onchange="appData.days[${index}].rehearsalMinutes = parseInt(this.value)">
+                            <select onchange="appData.days[${index}].rehearsalMinutes = parseInt(this.value)">
+                                ${buildNumberOptions(day.rehearsalMinutes, rangeValues(5, 120, 5))}
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>🎤 本番時間（分）</label>
-                            <input type="number" value="${day.performanceMinutes}" min="1"
-                                onchange="appData.days[${index}].performanceMinutes = parseInt(this.value)">
+                            <select onchange="appData.days[${index}].performanceMinutes = parseInt(this.value)">
+                                ${buildNumberOptions(day.performanceMinutes, rangeValues(5, 120, 5))}
+                            </select>
                         </div>
                     </div>
 
                     <div class="grid-2">
                         <div class="form-group">
                             <label>🍽️ 昼休憩（分）</label>
-                            <input type="number" value="${day.breakDuration}" min="0"
-                                onchange="appData.days[${index}].breakDuration = parseInt(this.value)">
+                            <select onchange="appData.days[${index}].breakDuration = parseInt(this.value)">
+                                ${buildNumberOptions(day.breakDuration, rangeValues(0, 120, 10))}
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>昼休憩を挿入するバンド</label>
@@ -924,15 +1109,26 @@
                     <!-- 追加されたバンド一覧 -->
                     <div id="bandsList${index}" style="margin-top: 20px;"></div>
 
-                    <div id="bandsDisplay${index}" style="margin-top: 20px;">
-                        ${day.bands.map(band => `
-                            <div class="member-card">
-                                <h3>${band}</h3>
-                                <button type="button" class="btn-secondary" 
-                                    onclick="removeBandFromDay(${index}, '${band}')" 
-                                    style="width: 100%; margin-top: 10px;">
-                                    🗑️ 削除
-                                </button>
+                    <div class="comment" style="margin-top: 10px;">
+                        ⠿ を掴んでドラッグするとバンドの順番を入れ替えられます。
+                    </div>
+
+                    <div id="bandsDisplay${index}" style="margin-top: 10px;">
+                        ${day.bands.map((band, bandIndex) => `
+                            <div class="band-row"
+                                draggable="true"
+                                ondragstart="handleBandDragStart(event, ${index}, ${bandIndex})"
+                                ondragover="handleBandDragOver(event, ${index})"
+                                ondragleave="handleBandDragLeave(event)"
+                                ondrop="handleBandDrop(event, ${index}, ${bandIndex})">
+                                <span class="band-drag-handle" title="ドラッグして並び替え">⠿</span>
+                                <span class="band-name">${band}</span>
+                                <div class="icon-btn-group">
+                                    <button type="button" class="icon-btn" title="編集"
+                                        onclick="renameBand(${index}, ${bandIndex})">✏️</button>
+                                    <button type="button" class="icon-btn" title="削除"
+                                        onclick="removeBandFromDay(${index}, '${band}')">🗑️</button>
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -1007,6 +1203,89 @@
             }
         }
 
+        function renameBand(dayIndex, bandIndex) {
+            const bands = appData.days[dayIndex].bands;
+            const oldName = bands[bandIndex];
+            const newName = prompt('新しいバンド名を入力してください', oldName);
+            if (newName === null) return; // キャンセル
+
+            const trimmed = newName.trim();
+            if (!trimmed) {
+                alert('バンド名を入力してください');
+                return;
+            }
+            if (trimmed !== oldName && bands.includes(trimmed)) {
+                alert('同じバンドは追加できません');
+                return;
+            }
+
+            bands[bandIndex] = trimmed;
+
+            // メンバー側の出演バンド・希望バンドの参照も更新する
+            appData.members.forEach(member => {
+                member.ng_bands = (member.ng_bands || []).map(b => b === oldName ? trimmed : b);
+                member.req_bands = (member.req_bands || []).map(b => b === oldName ? trimmed : b);
+            });
+
+            renderDayTabs();
+            renderMembersList();
+
+            const page2 = document.getElementById('page2');
+            if (page2 && page2.classList.contains('active')) {
+                updatePage2Options();
+            }
+        }
+
+        // バンドのドラッグ&ドロップ並び替え
+        let bandDragState = null; // { dayIndex, bandIndex }
+
+        function handleBandDragStart(e, dayIndex, bandIndex) {
+            bandDragState = { dayIndex, bandIndex };
+            e.dataTransfer.effectAllowed = 'move';
+            try {
+                e.dataTransfer.setData('text/plain', String(bandIndex));
+            } catch (err) {
+                // 一部ブラウザでのsetData失敗は無視
+            }
+        }
+
+        function handleBandDragOver(e, dayIndex) {
+            if (!bandDragState || bandDragState.dayIndex !== dayIndex) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleBandDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleBandDrop(e, dayIndex, targetIndex) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+
+            if (!bandDragState || bandDragState.dayIndex !== dayIndex) {
+                bandDragState = null;
+                return;
+            }
+
+            const sourceIndex = bandDragState.bandIndex;
+            bandDragState = null;
+            if (sourceIndex === targetIndex) return;
+
+            const bands = appData.days[dayIndex].bands;
+            const [moved] = bands.splice(sourceIndex, 1);
+            const adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+            bands.splice(adjustedTarget, 0, moved);
+
+            renderDayTabs();
+
+            const page2 = document.getElementById('page2');
+            if (page2 && page2.classList.contains('active')) {
+                updatePage2Options();
+            }
+        }
+
         // 学年ごとの配置回数上限（詳細設定）
         function renderGradeLimits() {
             const container = document.getElementById('gradeLimitsContainer');
@@ -1066,6 +1345,9 @@
         }
 
         // ページ2: メンバー管理
+        // NG時間帯の編集中データ（ダイヤル式入力の一時状態）: { 0: [{start, end}, ...], 1: [...] }
+        let ngTimeDraft = {};
+
         function updateMemberNgTimesUI() {
             const container = document.getElementById('memberNgTimesContainer');
             if (appData.numDays <= 0) {
@@ -1073,19 +1355,70 @@
                 return;
             }
 
+            // 日数の変更に合わせてドラフトを整える
+            for (let i = 0; i < appData.numDays; i++) {
+                if (!ngTimeDraft[i]) ngTimeDraft[i] = [];
+            }
+            Object.keys(ngTimeDraft).forEach(key => {
+                if (parseInt(key) >= appData.numDays) delete ngTimeDraft[key];
+            });
+
             let html = '<label style="display: block; margin-bottom: 10px;">⏰ NG時間帯（日別）</label>';
             for (let i = 0; i < appData.numDays; i++) {
                 const dayLabel = i + 1;
+                const ranges = ngTimeDraft[i] || [];
                 html += `
                     <div class="form-group" style="margin-bottom: 15px;">
                         <label style="font-size: 12px; margin-bottom: 5px; display: block; font-weight: 600;">${dayLabel}日目のNG時間帯</label>
-                        <input type="text" id="ngTimes${i}" placeholder="例：11:30-11:45,12:30-12:40" 
-                            style="width: 100%; margin-bottom: 5px;">
-                        <p style="font-size: 11px; color: #999; margin: 0;">複数の時間帯はカンマで区切ってください（HH:MM-HH:MM 形式）</p>
+                        <div id="ngRangeList${i}">
+                            ${ranges.map((range, rangeIndex) => `
+                                <div class="ng-range-row">
+                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'hour', this.value)">
+                                        ${hourOptions(splitTimeValue(range.start).hour)}
+                                    </select>
+                                    <span>：</span>
+                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'minute', this.value)">
+                                        ${minuteOptions(splitTimeValue(range.start).minute)}
+                                    </select>
+                                    <span class="ng-range-separator">〜</span>
+                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'hour', this.value)">
+                                        ${hourOptions(splitTimeValue(range.end).hour)}
+                                    </select>
+                                    <span>：</span>
+                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'minute', this.value)">
+                                        ${minuteOptions(splitTimeValue(range.end).minute)}
+                                    </select>
+                                    <button type="button" class="icon-btn" title="この時間帯を削除"
+                                        onclick="removeNgRange(${i}, ${rangeIndex})">🗑️</button>
+                                </div>
+                            `).join('') || '<p style="font-size: 12px; color: #999; margin: 0 0 6px 0;">NG時間帯はありません</p>'}
+                        </div>
+                        <button type="button" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;"
+                            onclick="addNgRange(${i})">+ 時間帯を追加</button>
                     </div>
                 `;
             }
             container.innerHTML = html;
+        }
+
+        function addNgRange(dayIndex) {
+            if (!ngTimeDraft[dayIndex]) ngTimeDraft[dayIndex] = [];
+            // 分かりやすいよう開始と終了が重ならない初期値にしておく（後で自由に変更可能）
+            ngTimeDraft[dayIndex].push({ start: '00:00', end: '00:10' });
+            updateMemberNgTimesUI();
+        }
+
+        function updateNgRangeTime(dayIndex, rangeIndex, field, part, value) {
+            if (!ngTimeDraft[dayIndex] || !ngTimeDraft[dayIndex][rangeIndex]) return;
+            const current = splitTimeValue(ngTimeDraft[dayIndex][rangeIndex][field]);
+            current[part] = value;
+            ngTimeDraft[dayIndex][rangeIndex][field] = combineTimeValue(current.hour, current.minute);
+        }
+
+        function removeNgRange(dayIndex, rangeIndex) {
+            if (!ngTimeDraft[dayIndex]) return;
+            ngTimeDraft[dayIndex].splice(rangeIndex, 1);
+            updateMemberNgTimesUI();
         }
 
         function addMember() {
@@ -1100,23 +1433,30 @@
             const reqBands = Array.from(document.querySelectorAll('.req-band-checkbox:checked'))
                 .map(checkbox => checkbox.value);
 
-            // 日別のNG時間を収集
+            // 日別のNG時間を収集（ダイヤル式入力から HH:MM-HH:MM 形式へ変換）
             const ngTimesPerDay = {};
+            let hasInvalidNgRange = false;
             for (let i = 0; i < appData.numDays; i++) {
-                const ngTimesInput = document.getElementById(`ngTimes${i}`);
-                if (ngTimesInput) {
-                    const ngTimes = ngTimesInput.value.trim()
-                        .split(',')
-                        .map(t => t.trim())
-                        .filter(t => t.length > 0);
-                    if (ngTimes.length > 0) {
-                        ngTimesPerDay[`day_${i + 1}`] = ngTimes;
+                const ranges = [];
+                (ngTimeDraft[i] || []).forEach(range => {
+                    if (range.start >= range.end) {
+                        hasInvalidNgRange = true;
+                        return;
                     }
+                    ranges.push(`${range.start}-${range.end}`);
+                });
+                if (ranges.length > 0) {
+                    ngTimesPerDay[`day_${i + 1}`] = ranges;
                 }
             }
 
             if (!name) {
                 alert('メンバー名を入力してください');
+                return;
+            }
+
+            if (hasInvalidNgRange) {
+                alert('NG時間帯は開始時刻が終了時刻より前になるようにしてください');
                 return;
             }
 
@@ -1182,13 +1522,15 @@
             const ngTimesByDay = Array.isArray(member.ng_times)
                 ? { day_1: member.ng_times }
                 : (member.ng_times || {});
+            ngTimeDraft = {};
             for (let i = 0; i < appData.numDays; i++) {
-                const input = document.getElementById(`ngTimes${i}`);
-                if (input) {
-                    const times = ngTimesByDay[`day_${i + 1}`] || [];
-                    input.value = times.join(',');
-                }
+                const times = ngTimesByDay[`day_${i + 1}`] || [];
+                ngTimeDraft[i] = times.map(t => {
+                    const [start, end] = String(t).split('-');
+                    return { start: start || '', end: end || '' };
+                });
             }
+            updateMemberNgTimesUI();
 
             const submitBtn = document.getElementById('memberSubmitBtn');
             if (submitBtn) submitBtn.textContent = '✅ メンバーを更新';
@@ -1212,10 +1554,8 @@
                 checkbox.checked = false;
             });
 
-            for (let i = 0; i < appData.numDays; i++) {
-                const input = document.getElementById(`ngTimes${i}`);
-                if (input) input.value = '';
-            }
+            ngTimeDraft = {};
+            updateMemberNgTimesUI();
 
             const submitBtn = document.getElementById('memberSubmitBtn');
             if (submitBtn) submitBtn.textContent = '+ メンバーを追加';
@@ -1252,29 +1592,53 @@
 
                 return `
                     <div class="member-card">
-                        <h3>${member.name}${member.grade ? `<span style="font-size: 12px; color: #667eea; font-weight: 600; margin-left: 8px;">🎓 ${member.grade}</span>` : ''}</h3>
+                        <div class="card-header-row">
+                            <h3>${member.name}${member.grade ? `<span style="font-size: 12px; color: #667eea; font-weight: 600; margin-left: 8px;">🎓 ${member.grade}</span>` : ''}</h3>
+                            <div class="icon-btn-group">
+                                <button type="button" class="icon-btn" title="編集" onclick="startEditMember(${member.id})">✏️</button>
+                                <button type="button" class="icon-btn" title="削除" onclick="removeMember(${member.id})">🗑️</button>
+                            </div>
+                        </div>
                         <div class="member-info">
                             <div><strong>卓スキル:</strong> ${member.skill_desk}/5</div>
                             <div><strong>ステージスキル:</strong> ${member.skill_stage}/5</div>
                             <div><strong>NG バンド:</strong> ${member.ng_bands.length > 0 ? member.ng_bands.join(', ') : 'なし'}</div>
                             <div><strong>NG 時間:</strong> ${ngTimesDisplay || 'なし'}</div>
                             <div><strong>希望バンド:</strong> ${member.req_bands.length > 0 ? member.req_bands.join(', ') : 'なし'}</div>
-                            <div style="grid-column: 1/-1; margin-top: 10px; display: flex; gap: 10px;">
-                                <button type="button" class="btn-secondary" onclick="startEditMember(${member.id})" style="flex: 1;">
-                                    ✏️ 編集
-                                </button>
-                                <button type="button" class="btn-secondary" onclick="removeMember(${member.id})" style="flex: 1;">
-                                    🗑️ 削除
-                                </button>
-                            </div>
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
+        // ページ1: 数値入力欄（選択式）の初期選択肢を組み立てる
+        function initStaticSelects() {
+            document.getElementById('numDays').innerHTML =
+                buildNumberOptions(1, rangeValues(1, 10, 1));
+
+            document.getElementById('deskMaxMembers').innerHTML =
+                buildNumberOptions('', rangeValues(1, 20, 1), 'デフォルト: 2');
+            document.getElementById('stageMaxMembers').innerHTML =
+                buildNumberOptions('', rangeValues(1, 20, 1), 'デフォルト: 2');
+
+            document.getElementById('deskLimitPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
+            document.getElementById('stageLimitPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
+
+            document.getElementById('candidateCount').innerHTML =
+                buildNumberOptions('', rangeValues(1, 50, 1), 'デフォルト: 12');
+
+            document.getElementById('gradeLimitDeskMax').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
+            document.getElementById('gradeLimitStageMax').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
+        }
+
         // ページ2での初期化
         document.addEventListener('DOMContentLoaded', function() {
+            initStaticSelects();
+
             // ページ2タブに切り替わったときにNG時間UIを更新
             const page2Observer = new MutationObserver(function() {
                 const page2 = document.getElementById('page2');
@@ -1296,12 +1660,6 @@
                 const el = document.getElementById(id);
                 return el ? el.value.trim() : '';
             };
-
-            const deskScoreThreshold = getValue('deskScoreThreshold');
-            if (deskScoreThreshold !== '') config.desk_score_threshold = parseFloat(deskScoreThreshold);
-
-            const stageScoreThreshold = getValue('stageScoreThreshold');
-            if (stageScoreThreshold !== '') config.stage_score_threshold = parseFloat(stageScoreThreshold);
 
             const deskMaxMembers = getValue('deskMaxMembers');
             if (deskMaxMembers !== '') config.desk_max_members = parseInt(deskMaxMembers);
@@ -1328,7 +1686,10 @@
         // 成立しなかった原因（reason）をわかりやすい文字列に整形
         function formatInfeasibleReason(entry) {
             if (entry.reason) return entry.reason;
-            return `卓スコア ${entry.desk_score}/${entry.desk_required}、ステージスコア ${entry.stage_score}/${entry.stage_required}`;
+            const parts = [];
+            if (!entry.desk_has_leader) parts.push('卓にリーダー（スキル3以上）不在');
+            if (!entry.stage_has_leader) parts.push('ステージにリーダー（スキル3以上）不在');
+            return parts.join('、') || '成立条件を満たせませんでした';
         }
 
         function showShiftError(data, fallbackMessage) {
@@ -1525,14 +1886,14 @@
                     const entryType = entry.type === 'rh' ? 'リハ' : entry.type === 'act' ? '本番' : '休憩';
                     const issue = entry.type !== 'break' ? infeasibleForDay[entry.name] : null;
 
-                    const deskShort = issue && issue.desk_score < issue.desk_required;
-                    const stageShort = issue && issue.stage_score < issue.stage_required;
+                    const deskShort = issue && issue.desk_has_leader === false;
+                    const stageShort = issue && issue.stage_has_leader === false;
 
                     const deskCell = deskShort
-                        ? `<span style="color: #c62828;">${desk || '-'}</span><br><small style="color: #c62828;">⚠️ 卓不足（${issue.desk_score}/${issue.desk_required}）</small>`
+                        ? `<span style="color: #c62828;">${desk || '-'}</span><br><small style="color: #c62828;">⚠️ リーダー（スキル3以上）不在</small>`
                         : (desk || '-');
                     const stageCell = stageShort
-                        ? `<span style="color: #c62828;">${stage || '-'}</span><br><small style="color: #c62828;">⚠️ ステージ不足（${issue.stage_score}/${issue.stage_required}）</small>`
+                        ? `<span style="color: #c62828;">${stage || '-'}</span><br><small style="color: #c62828;">⚠️ リーダー（スキル3以上）不在</small>`
                         : (stage || '-');
 
                     const rowStyle = issue ? ' style="background: #fff5f5;"' : '';

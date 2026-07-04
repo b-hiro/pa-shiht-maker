@@ -4,7 +4,7 @@ proto-type.py をベースに Flask で API サーバーを構築
 複数日対応版
 """
 
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import copy
@@ -18,8 +18,11 @@ from io import BytesIO
 app = Flask(__name__)
 CORS(app)  # CORS対応
 
-DESK_SCORE_THRESHOLD = 5
-STAGE_SCORE_THRESHOLD = 5
+# スキル3以上を「リーダー」とみなす（スキルは 3=リーダー / 1=アシスタント の2段階運用が前提）
+LEADER_SKILL_LEVEL = 3
+# desk_max_members / stage_max_members が未設定の場合のデフォルト人数上限（リーダー1名+アシスタント1名）
+DEFAULT_DESK_MAX_MEMBERS = 2
+DEFAULT_STAGE_MAX_MEMBERS = 2
 CONTINUITY_BONUS = 20
 
 # 複数パターンを生成し最良案を選ぶ際の試行回数（リクエストの candidate_count で上書き可）
@@ -188,16 +191,6 @@ def normalize_members(members):
     return [normalize_member(m) for m in members]
 
 
-def _validate_optional_non_negative_number(value, field_name):
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return f"{field_name} は数値である必要があります"
-    if value < 0:
-        return f"{field_name} は0以上である必要があります"
-    return None
-
-
 def _validate_optional_non_negative_int(value, field_name):
     if value is None:
         return None
@@ -210,13 +203,15 @@ def _validate_optional_non_negative_int(value, field_name):
 
 def parse_shift_config(data):
     """
-    リクエストボディから任意の詳細設定（スコア基準・人数上限・個人/学年別の配置上限など）を取り出し検証する
+    リクエストボディから任意の詳細設定（人数上限・個人/学年別の配置上限など）を取り出し検証する
     戻り値: (config_dict, error_message)  ※どの項目も省略可能で、省略時は従来通りの動作になる
+
+    卓・ステージの成立条件はスコア閾値ではなく「スキル3以上のリーダーを最低1名含むこと」（ロールベース判定）。
+    desk_max_members / stage_max_members は「リーダーを確保した上で何人まで補充するか」の人数上限で、
+    未設定の場合は DEFAULT_DESK_MAX_MEMBERS / DEFAULT_STAGE_MAX_MEMBERS を使用する。
     """
     data = data or {}
     config = {
-        "desk_score_threshold": data.get("desk_score_threshold", DESK_SCORE_THRESHOLD),
-        "stage_score_threshold": data.get("stage_score_threshold", STAGE_SCORE_THRESHOLD),
         "desk_max_members": data.get("desk_max_members"),
         "stage_max_members": data.get("stage_max_members"),
         "desk_limit_per_member": data.get("desk_limit_per_member"),
@@ -225,15 +220,15 @@ def parse_shift_config(data):
         "candidate_count": data.get("candidate_count", DEFAULT_CANDIDATE_COUNT),
     }
 
-    for field in ("desk_score_threshold", "stage_score_threshold"):
-        error = _validate_optional_non_negative_number(config[field], field)
-        if error:
-            return None, error
-
     for field in ("desk_max_members", "stage_max_members", "desk_limit_per_member", "stage_limit_per_member"):
         error = _validate_optional_non_negative_int(config[field], field)
         if error:
             return None, error
+
+    if config["desk_max_members"] is None:
+        config["desk_max_members"] = DEFAULT_DESK_MAX_MEMBERS
+    if config["stage_max_members"] is None:
+        config["stage_max_members"] = DEFAULT_STAGE_MAX_MEMBERS
 
     if not isinstance(config["grade_limits"], dict):
         return None, "grade_limits はオブジェクトである必要があります"
@@ -337,15 +332,47 @@ def _grade_role_limit_ok(member, role, grade_totals, config):
     return grade_totals[role][grade_key] < limit
 
 
+def _select_team_with_leader(candidates, skill_field, max_members):
+    """
+    priority降順でソート済みの候補リストから、
+    「スキル3以上のリーダーを最低1名含む」チームを組み立てる（ロールベースのハード制約）。
+
+    - リーダー候補（skill_field >= LEADER_SKILL_LEVEL）が1人もいなければ、
+      アシスタントが何人いてもチームは組めない（成立不可）ため ([], None) を返す。
+    - リーダーが見つかった場合は、そのリーダーを必ず含めた上で、
+      priorityが高い順に max_members に達するまで残りの枠を補充する。
+
+    戻り値: (team, leader)  ※team は選ばれたメンバーのリスト、leader は確保できたリーダー（いなければNone）
+    """
+    if not max_members or max_members < 1:
+        return [], None
+
+    leader = next((m for m in candidates if m[skill_field] >= LEADER_SKILL_LEVEL), None)
+    if leader is None:
+        return [], None
+
+    team = [leader]
+    for m in candidates:
+        if len(team) >= max_members:
+            break
+        if m is leader:
+            continue
+        team.append(m)
+
+    return team, leader
+
+
 def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members, grade_totals, config, rng, day_num, shift_limit):
     """
     1バンド分の卓・ステージ担当を決定し、メンバーの状態（count/desk_count/stage_count）と
     学年別合計（grade_totals）を更新する
+
+    成立条件（ロールベースのハード制約）:
+    卓・ステージそれぞれについて「スキル3以上のリーダーを最低1名含むこと」が必須。
+    リーダーを確保できない場合、そのロールは成立不可（アシスタントのみでの編成は不可）。
     """
-    desk_threshold = config["desk_score_threshold"]
-    stage_threshold = config["stage_score_threshold"]
-    desk_max_members = config.get("desk_max_members")
-    stage_max_members = config.get("stage_max_members")
+    desk_max_members = config.get("desk_max_members", DEFAULT_DESK_MAX_MEMBERS)
+    stage_max_members = config.get("stage_max_members", DEFAULT_STAGE_MAX_MEMBERS)
     desk_limit_per_member = config.get("desk_limit_per_member")
     stage_limit_per_member = config.get("stage_limit_per_member")
 
@@ -384,16 +411,7 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         available_desk.append(candidate)
 
     available_desk.sort(key=lambda x: x["priority_desk"], reverse=True)
-
-    desk_team = []
-    desk_score = 0
-    for m in available_desk:
-        if desk_score >= desk_threshold:
-            break
-        if desk_max_members is not None and len(desk_team) >= desk_max_members:
-            break
-        desk_team.append(m)
-        desk_score += m["skill_desk"]
+    desk_team, desk_leader = _select_team_with_leader(available_desk, "skill_desk", desk_max_members)
 
     # ステージチーム編成（すでに卓に割り当てられたメンバーは除く）
     desk_team_names = {m["name"] for m in desk_team}
@@ -421,16 +439,7 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         available_stage.append(candidate)
 
     available_stage.sort(key=lambda x: x["priority_stage"], reverse=True)
-
-    stage_team = []
-    stage_score = 0
-    for m in available_stage:
-        if stage_score >= stage_threshold:
-            break
-        if stage_max_members is not None and len(stage_team) >= stage_max_members:
-            break
-        stage_team.append(m)
-        stage_score += m["skill_stage"]
+    stage_team, stage_leader = _select_team_with_leader(available_stage, "skill_stage", stage_max_members)
 
     # 状態更新（カウント・学年別合計）
     desk_names = [m["name"] for m in desk_team]
@@ -453,30 +462,29 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
     band_result = {"卓": desk_names, "ステージ": stage_names}
 
     infeasible_entry = None
-    if desk_score < desk_threshold or stage_score < stage_threshold:
+    if desk_leader is None or stage_leader is None:
         reasons = []
-        if desk_score < desk_threshold:
+        if desk_leader is None:
             reasons.append(
-                f"卓スコアが{desk_score}/{desk_threshold}で不足しています"
-                "（NG条件・学年/個人ごとの配置上限・卓の人数上限などにより、対応できる候補者が不足している可能性があります）"
+                f"卓にスキル{LEADER_SKILL_LEVEL}以上のリーダーを配置できませんでした"
+                "（NG条件・学年/個人ごとの配置上限などにより、対応できるリーダー候補が不足している可能性があります）"
             )
-        if stage_score < stage_threshold:
+        if stage_leader is None:
             reasons.append(
-                f"ステージスコアが{stage_score}/{stage_threshold}で不足しています"
-                "（NG条件・学年/個人ごとの配置上限・ステージの人数上限などにより、対応できる候補者が不足している可能性があります）"
+                f"ステージにスキル{LEADER_SKILL_LEVEL}以上のリーダーを配置できませんでした"
+                "（NG条件・学年/個人ごとの配置上限などにより、対応できるリーダー候補が不足している可能性があります）"
             )
         infeasible_entry = {
             "band": band,
-            "desk_score": desk_score,
-            "stage_score": stage_score,
-            "desk_required": desk_threshold,
-            "stage_required": stage_threshold,
+            "desk_has_leader": desk_leader is not None,
+            "stage_has_leader": stage_leader is not None,
             "desk_members": desk_names,
             "stage_members": stage_names,
             "reason": " / ".join(reasons),
         }
 
-    return band_result, desk_score, stage_score, infeasible_entry
+    team_size = len(desk_names) + len(stage_names)
+    return band_result, team_size, infeasible_entry
 
 
 def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, day_num=None):
@@ -487,7 +495,7 @@ def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, da
 
     day_shift = {}
     infeasible_bands = []
-    band_scores = []
+    band_team_sizes = []
 
     for i, band in enumerate(band_order):
         prev_band = band_order[i - 1] if i > 0 else None
@@ -497,26 +505,26 @@ def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, da
         if prev_band and prev_band in day_shift:
             prev_assigned = set(day_shift[prev_band]["卓"] + day_shift[prev_band]["ステージ"])
 
-        band_result, desk_score, stage_score, infeasible_entry = _assign_band(
+        band_result, team_size, infeasible_entry = _assign_band(
             band, band_times[band], prev_band, next_band, prev_assigned,
             members, grade_totals, config, rng, day_num, shift_limit,
         )
         day_shift[band] = band_result
-        band_scores.append(desk_score + stage_score)
+        band_team_sizes.append(team_size)
         if infeasible_entry:
             infeasible_bands.append(infeasible_entry)
 
-    return day_shift, infeasible_bands, band_scores
+    return day_shift, infeasible_bands, band_team_sizes
 
 
-def _candidate_quality(infeasible_count, band_scores, members):
+def _candidate_quality(infeasible_count, band_team_sizes, members):
     """
     候補案の良さを比較するためのスコア（小さいほど良い）
     1) 成立しなかったバンド数が少ない方が良い
-    2) 卓+ステージの合計スコアがバンド間で均されている方が良い（標準偏差が小さい）
+    2) バンドごとの人数がバンド間で均されている方が良い（標準偏差が小さい）
     3) メンバー間の配置回数の偏りが少ない方が良い（標準偏差が小さい）
     """
-    balance = statistics.pstdev(band_scores) if len(band_scores) > 1 else 0.0
+    balance = statistics.pstdev(band_team_sizes) if len(band_team_sizes) > 1 else 0.0
     counts = [m["count"] for m in members]
     fairness = statistics.pstdev(counts) if len(counts) > 1 else 0.0
     return (infeasible_count, balance, fairness)
@@ -524,14 +532,15 @@ def _candidate_quality(infeasible_count, band_scores, members):
 
 def generate_pa_shift(timetable, members_data, day_num=None, config=None):
     """
-    PAシフトを作成する関数（v3）
+    PAシフトを作成する関数（v4）
     - NG時間は部分一致（1分でも被れば除外）で判定
+    - 卓・ステージの成立条件はロールベース：スキル3以上のリーダーを最低1名含むことが必須
     - 優先度にランダムな揺らぎを加えた複数パターンを生成し、
-      「成立バンド数が多い」→「卓+ステージ合計スコアの均一性が高い」→「配置回数の公平性が高い」
+      「成立バンド数が多い」→「バンド間の人数の均一性が高い」→「配置回数の公平性が高い」
       の順で最も良い案を採用する
     """
     if config is None:
-        config = {"desk_score_threshold": DESK_SCORE_THRESHOLD, "stage_score_threshold": STAGE_SCORE_THRESHOLD}
+        config = {"desk_max_members": DEFAULT_DESK_MAX_MEMBERS, "stage_max_members": DEFAULT_STAGE_MAX_MEMBERS}
 
     band_order, _ = _band_order_and_times(timetable)
     num_bands = len(band_order)
@@ -547,10 +556,10 @@ def generate_pa_shift(timetable, members_data, day_num=None, config=None):
         grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int)}
         candidate_rng = _ZERO_JITTER if i == 0 else rng
 
-        day_shift, infeasible_bands, band_scores = _run_day_core(
+        day_shift, infeasible_bands, band_team_sizes = _run_day_core(
             timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num
         )
-        quality = _candidate_quality(len(infeasible_bands), band_scores, members_state)
+        quality = _candidate_quality(len(infeasible_bands), band_team_sizes, members_state)
         if best is None or quality < best[0]:
             best = (quality, day_shift, members_state, infeasible_bands)
 
@@ -596,13 +605,14 @@ def generate_timetable_multi_day(timetable_config):
 
 def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
     """
-    複数日のシフトを生成する関数（v3）
+    複数日のシフトを生成する関数（v4）
     - ng_times は日別dictのまま非破壊で参照する（2日目以降もNG時間が正しく効く）
+    - 卓・ステージの成立条件はロールベース：スキル3以上のリーダーを最低1名含むことが必須
     - 配置回数の上限（shift_limit）・個人/学年別の配置上限は「全日程を通じた合計」で管理する
     - 優先度にランダムな揺らぎを加えた複数パターンを全日程分通しで生成し、最も良い案を採用する
     """
     if config is None:
-        config = {"desk_score_threshold": DESK_SCORE_THRESHOLD, "stage_score_threshold": STAGE_SCORE_THRESHOLD}
+        config = {"desk_max_members": DEFAULT_DESK_MAX_MEMBERS, "stage_max_members": DEFAULT_STAGE_MAX_MEMBERS}
 
     sorted_days = sorted(timetable_multi.items(), key=lambda item: day_sort_key(item[0]))
 
@@ -621,20 +631,20 @@ def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
 
         shift_result = {}
         infeasible_days = {}
-        all_band_scores = []
+        all_band_team_sizes = []
 
         for day_key, timetable in sorted_days:
             day_num = day_sort_key(day_key)
-            day_shift, infeasible_bands, band_scores = _run_day_core(
+            day_shift, infeasible_bands, band_team_sizes = _run_day_core(
                 timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num
             )
             shift_result[day_key] = day_shift
-            all_band_scores.extend(band_scores)
+            all_band_team_sizes.extend(band_team_sizes)
             if infeasible_bands:
                 infeasible_days[day_key] = infeasible_bands
 
         total_infeasible = sum(len(v) for v in infeasible_days.values())
-        quality = _candidate_quality(total_infeasible, all_band_scores, members_state)
+        quality = _candidate_quality(total_infeasible, all_band_team_sizes, members_state)
         if best is None or quality < best[0]:
             best = (quality, shift_result, members_state, infeasible_days)
 
@@ -741,6 +751,14 @@ def create_excel_workbook(timetable_multi, shift_result, members):
 
 
 
+@app.route("/", methods=["GET"])
+def index():
+    """
+    ルートURL: templates/index.html（フロントエンド）を返す
+    """
+    return render_template("index.html")
+
+
 @app.route("/api/generate-shift-multi-day", methods=["POST"])
 def api_generate_shift_multi_day():
     """
@@ -763,7 +781,7 @@ def api_generate_shift_multi_day():
         if members_error:
             return jsonify({"error": members_error}), 400
 
-        # 詳細設定（スコア基準・人数上限・個人/学年別の配置上限など、すべて任意）の取得
+        # 詳細設定（人数上限・個人/学年別の配置上限など、すべて任意）の取得
         config, config_error = parse_shift_config(data)
         if config_error:
             return jsonify({"error": config_error}), 400
@@ -862,7 +880,7 @@ def api_generate_shift():
         if members_error:
             return jsonify({"error": members_error}), 400
 
-        # 詳細設定（スコア基準・人数上限・個人/学年別の配置上限など、すべて任意）の取得
+        # 詳細設定（人数上限・個人/学年別の配置上限など、すべて任意）の取得
         config, config_error = parse_shift_config(data)
         if config_error:
             return jsonify({"error": config_error}), 400

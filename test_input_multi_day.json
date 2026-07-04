@@ -97,8 +97,6 @@
       ]
     }
   ],
-  "desk_score_threshold": 5,
-  "stage_score_threshold": 3,
   "desk_max_members": null,
   "stage_max_members": null,
   "desk_limit_per_member": null,

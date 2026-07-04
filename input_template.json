@@ -19,8 +19,8 @@
     {
       "name": "みらい",
       "grade": "1",
-      "skill_desk": 5,
-      "skill_stage": 4,
+      "skill_desk": 3,
+      "skill_stage": 1,
       "count": 0,
       "ng_bands": [],
       "ng_times": {
@@ -31,7 +31,7 @@
     {
       "name": "るい",
       "grade": "1",
-      "skill_desk": 3,
+      "skill_desk": 1,
       "skill_stage": 3,
       "count": 0,
       "ng_bands": [],
@@ -43,8 +43,8 @@
     {
       "name": "先輩A",
       "grade": "2",
-      "skill_desk": 5,
-      "skill_stage": 5,
+      "skill_desk": 3,
+      "skill_stage": 3,
       "count": 0,
       "ng_bands": [],
       "ng_times": {
@@ -55,8 +55,8 @@
     {
       "name": "後輩B",
       "grade": "1",
-      "skill_desk": 2,
-      "skill_stage": 2,
+      "skill_desk": 1,
+      "skill_stage": 1,
       "count": 0,
       "ng_bands": [],
       "ng_times": {
@@ -68,7 +68,7 @@
       "name": "先輩C",
       "grade": "2",
       "skill_desk": 3,
-      "skill_stage": 3,
+      "skill_stage": 1,
       "count": 0,
       "ng_bands": [],
       "ng_times": {
@@ -77,8 +77,6 @@
       "req_bands": []
     }
   ],
-  "desk_score_threshold": 5,
-  "stage_score_threshold": 3,
   "desk_max_members": null,
   "stage_max_members": null,
   "desk_limit_per_member": null,
