@@ -103,8 +103,14 @@
             gap: 20px;
         }
 
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
         @media (max-width: 600px) {
-            .grid-2 {
+            .grid-2, .grid-3 {
                 grid-template-columns: 1fr;
             }
         }
@@ -480,6 +486,8 @@
                     <select id="numDays" required onchange="updateDayTabs()"></select>
                 </div>
 
+                <p id="totalBandsCount" style="margin-top: 15px; color: #333; font-weight: 600;">🎸 登録バンド数: 0 バンド（全日程合計）</p>
+
                 <!-- 日別設定タブ -->
                 <div id="daysContainer" style="margin-top: 30px;">
                     <div class="tabs" id="dayTabs"></div>
@@ -499,6 +507,8 @@
                         <strong>💡 成立条件について:</strong>
                         卓・ステージとも「スキル3以上のリーダーを最低1名含むこと」が必須です。
                         リーダーを確保できないバンドは成立不可（エラー）として扱われます。
+                        卓は「リーダー1名＋アシスタント1名」が基本形で、アシスタント候補がいない場合はリーダー1名のみでも成立とみなします（リーダーを2名重複配置しません）。
+                        ステージはリーダー確保後、人数上限までスキルを問わず優先度順に補充します。
                     </div>
 
                     <div class="grid-2">
@@ -658,10 +668,14 @@
             <!-- サマリー情報 -->
             <div style="background: #f0f5ff; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
                 <h3 style="color: #333; margin-bottom: 15px;">📋 設定内容のサマリー</h3>
-                <div class="grid-2">
+                <div class="grid-3">
                     <div>
                         <p style="color: #666; font-size: 13px;">イベント日数</p>
                         <p id="summaryDays" style="color: #333; font-weight: 600;">0 日</p>
+                    </div>
+                    <div>
+                        <p style="color: #666; font-size: 13px;">登録バンド数</p>
+                        <p id="summaryBands" style="color: #333; font-weight: 600;">0 バンド</p>
                     </div>
                     <div>
                         <p style="color: #666; font-size: 13px;">登録メンバー数</p>
@@ -964,8 +978,23 @@
             if (pageNumber === 2) {
                 updatePage2Options();
             }
+            // ページ3に遷移した場合、サマリー（日数・バンド数・メンバー数）を最新化
+            if (pageNumber === 3) {
+                updateSummary();
+            }
 
             window.scrollTo(0, 0);
+        }
+
+        // 全日程を通じた登録バンド数（重複含む延べ数）を計算する
+        function getTotalBandCount() {
+            return appData.days.reduce((total, day) => total + day.bands.length, 0);
+        }
+
+        // ページ1に表示している登録バンド数を更新する
+        function updateTotalBandsDisplay() {
+            const el = document.getElementById('totalBandsCount');
+            if (el) el.textContent = `🎸 登録バンド数: ${getTotalBandCount()} バンド（全日程合計）`;
         }
 
         // ページ2の選択肢を更新
@@ -1139,6 +1168,8 @@
             if (appData.days.length > 0) {
                 switchDayTab(0);
             }
+
+            updateTotalBandsDisplay();
         }
 
         function switchDayTab(dayIndex) {
@@ -1843,6 +1874,7 @@
 
         function updateSummary() {
             document.getElementById('summaryDays').textContent = `${appData.numDays} 日`;
+            document.getElementById('summaryBands').textContent = `${getTotalBandCount()} バンド`;
             document.getElementById('summaryMembers').textContent = `${appData.members.length} 人`;
         }
 

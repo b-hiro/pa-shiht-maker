@@ -24,6 +24,16 @@ LEADER_SKILL_LEVEL = 3
 DEFAULT_DESK_MAX_MEMBERS = 2
 DEFAULT_STAGE_MAX_MEMBERS = 2
 CONTINUITY_BONUS = 20
+# shift_limit（配置回数の目安上限）を超えたメンバーを候補から除外せず、
+# 優先度を大きく下げた「予備要員」として残すためのペナルティ幅
+OVER_SHIFT_LIMIT_PENALTY = 10000
+# 同一役割（卓/ステージ）へ連続で配置してよい上限回数。
+# これを超える4回連続以上になる配置は、他に候補がいない場合の最終手段としてのみ許容する
+CONSECUTIVE_ROLE_LIMIT = 3
+CONSECUTIVE_ROLE_PENALTY = 10000
+# 同一役割へまだ上限に達していない範囲で連続させるための優先度ボーナス
+# （1バンドごとに役割が頻繁に入れ替わるのを避け、できれば2回以上連続するように後押しする）
+ROLE_CONTINUITY_BONUS = 15
 
 # 複数パターンを生成し最良案を選ぶ際の試行回数（リクエストの candidate_count で上書き可）
 DEFAULT_CANDIDATE_COUNT = 12
@@ -181,6 +191,10 @@ def normalize_member(member):
     normalized["count"] = 0
     normalized["desk_count"] = 0
     normalized["stage_count"] = 0
+    # 直近の配置役割と、その役割への連続配置回数（同一役割への集中を検知するため）
+    normalized["last_role"] = None
+    normalized["role_streak"] = 0
+    normalized["max_role_streak"] = 0
     return normalized
 
 
@@ -332,15 +346,20 @@ def _grade_role_limit_ok(member, role, grade_totals, config):
     return grade_totals[role][grade_key] < limit
 
 
-def _select_team_with_leader(candidates, skill_field, max_members):
+def _select_team_with_leader(candidates, skill_field, max_members, assistant_only_fill=False):
     """
     priority降順でソート済みの候補リストから、
     「スキル3以上のリーダーを最低1名含む」チームを組み立てる（ロールベースのハード制約）。
 
     - リーダー候補（skill_field >= LEADER_SKILL_LEVEL）が1人もいなければ、
       アシスタントが何人いてもチームは組めない（成立不可）ため ([], None) を返す。
-    - リーダーが見つかった場合は、そのリーダーを必ず含めた上で、
-      priorityが高い順に max_members に達するまで残りの枠を補充する。
+    - リーダーが見つかった場合は、そのリーダーを必ず含めた上で、残りの枠を補充する。
+
+    assistant_only_fill=False（既定・ステージ向け）:
+      priorityが高い順に、スキルを問わず max_members に達するまで補充する。
+    assistant_only_fill=True（卓向け）:
+      残りの枠は「スキル3未満のアシスタント」だけで補充する（＝リーダーを2人以上入れない）。
+      アシスタント候補がいなければ無理に埋めず、リーダー1名のみのチームも許容する。
 
     戻り値: (team, leader)  ※team は選ばれたメンバーのリスト、leader は確保できたリーダー（いなければNone）
     """
@@ -352,11 +371,14 @@ def _select_team_with_leader(candidates, skill_field, max_members):
         return [], None
 
     team = [leader]
-    for m in candidates:
+    if assistant_only_fill:
+        fill_pool = (m for m in candidates if m is not leader and m[skill_field] < LEADER_SKILL_LEVEL)
+    else:
+        fill_pool = (m for m in candidates if m is not leader)
+
+    for m in fill_pool:
         if len(team) >= max_members:
             break
-        if m is leader:
-            continue
         team.append(m)
 
     return team, leader
@@ -364,12 +386,27 @@ def _select_team_with_leader(candidates, skill_field, max_members):
 
 def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members, grade_totals, config, rng, day_num, shift_limit):
     """
-    1バンド分の卓・ステージ担当を決定し、メンバーの状態（count/desk_count/stage_count）と
-    学年別合計（grade_totals）を更新する
+    1バンド分の卓・ステージ担当を決定し、メンバーの状態（count/desk_count/stage_count/
+    last_role/role_streak/max_role_streak）と学年別合計（grade_totals）を更新する
 
     成立条件（ロールベースのハード制約）:
     卓・ステージそれぞれについて「スキル3以上のリーダーを最低1名含むこと」が必須。
     リーダーを確保できない場合、そのロールは成立不可（アシスタントのみでの編成は不可）。
+
+    卓チームは「リーダー1名 + アシスタント1名」を基本形とし、アシスタント候補がいなければ
+    リーダー1名のみの編成も許容する（リーダーを2人重複配置しない）。
+    ステージチームは従来通り、リーダー確保後は優先度順にスキルを問わず人数上限まで補充する。
+
+    負担の偏り対策（ソフト制約・優先度調整）:
+    - 同一役割に3回連続で入っているメンバーは、さらに同じ役割に入る優先度を大きく下げる
+      （shift_limitと同様、ハード除外はせず他に候補がいない場合の最終手段として許容する）
+    - 逆に、まだ上限（3回）に達していない範囲では同じ役割を連続させる優先度を少し上げ、
+      1バンドごとに役割が頻繁に入れ替わるのを避け、できれば2回以上連続するように後押しする
+      （卓・ステージのどちらかが最終的に0回になっても構わない。偏り自体は許容する）
+
+    shift_limit（配置回数の目安上限）は候補から除外するハード制約ではなく、
+    優先度を大きく下げるペナルティとして扱う。これにより、他に候補がいない場合は
+    上限を超えたメンバーも「予備要員」として配置できる。
     """
     desk_max_members = config.get("desk_max_members", DEFAULT_DESK_MAX_MEMBERS)
     stage_max_members = config.get("stage_max_members", DEFAULT_STAGE_MAX_MEMBERS)
@@ -377,9 +414,6 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
     stage_limit_per_member = config.get("stage_limit_per_member")
 
     def base_eligible(m):
-        # 上限チェック：仕事回数が上限に達していないか
-        if m["count"] >= shift_limit:
-            return False
         # NG判定①：自分が出演するバンド、またはその「前後」ならシフト不可
         if band in m["ng_bands"] or prev_band in m["ng_bands"] or next_band in m["ng_bands"]:
             return False
@@ -387,6 +421,24 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         if has_time_conflict(band_slots, m, day_num):
             return False
         return True
+
+    def over_limit_penalty(m):
+        # shift_limit到達者はハード除外せず、優先度を大きく下げて「予備要員」として残す
+        return OVER_SHIFT_LIMIT_PENALTY if m["count"] >= shift_limit else 0
+
+    def consecutive_role_penalty(m, role):
+        # 同一役割に既に3回連続で入っているメンバーが、さらに同じ役割に入るのを強く抑制する
+        # （ハード除外はせず、他に候補がいない場合の最終手段としてのみ許容する）
+        if m.get("last_role") == role and m.get("role_streak", 0) >= CONSECUTIVE_ROLE_LIMIT:
+            return CONSECUTIVE_ROLE_PENALTY
+        return 0
+
+    def role_continuity_bonus(m, role):
+        # 直前と同じ役割で、かつまだ連続上限（3回）に達していなければ、
+        # その役割を継続する優先度を少し上げる（1バンドごとの頻繁な入れ替わりを避けるため）
+        if m.get("last_role") == role and 0 < m.get("role_streak", 0) < CONSECUTIVE_ROLE_LIMIT:
+            return ROLE_CONTINUITY_BONUS
+        return 0
 
     # 卓チーム編成
     available_desk = []
@@ -404,6 +456,9 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         priority_desk += m["skill_desk"]
         if m["name"] in prev_assigned:
             priority_desk += CONTINUITY_BONUS
+        priority_desk -= over_limit_penalty(m)
+        priority_desk -= consecutive_role_penalty(m, "desk")
+        priority_desk += role_continuity_bonus(m, "desk")
         priority_desk += rng.uniform(0, PRIORITY_JITTER)
 
         candidate = m.copy()
@@ -411,7 +466,9 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         available_desk.append(candidate)
 
     available_desk.sort(key=lambda x: x["priority_desk"], reverse=True)
-    desk_team, desk_leader = _select_team_with_leader(available_desk, "skill_desk", desk_max_members)
+    desk_team, desk_leader = _select_team_with_leader(
+        available_desk, "skill_desk", desk_max_members, assistant_only_fill=True
+    )
 
     # ステージチーム編成（すでに卓に割り当てられたメンバーは除く）
     desk_team_names = {m["name"] for m in desk_team}
@@ -432,6 +489,9 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         priority_stage += m["skill_stage"]
         if m["name"] in prev_assigned:
             priority_stage += CONTINUITY_BONUS
+        priority_stage -= over_limit_penalty(m)
+        priority_stage -= consecutive_role_penalty(m, "stage")
+        priority_stage += role_continuity_bonus(m, "stage")
         priority_stage += rng.uniform(0, PRIORITY_JITTER)
 
         candidate = m.copy()
@@ -441,7 +501,7 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
     available_stage.sort(key=lambda x: x["priority_stage"], reverse=True)
     stage_team, stage_leader = _select_team_with_leader(available_stage, "skill_stage", stage_max_members)
 
-    # 状態更新（カウント・学年別合計）
+    # 状態更新（カウント・学年別合計・連続役割ストリーク）
     desk_names = [m["name"] for m in desk_team]
     stage_names = [m["name"] for m in stage_team]
     assigned_names = set(desk_names) | set(stage_names)
@@ -458,6 +518,23 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             grade_key = _member_grade_key(m)
             if grade_key is not None:
                 grade_totals["stage"][grade_key] += 1
+
+        # 配置されなかったバンドではストリークを維持し、
+        # 「連続で働いたときに同じ役割が何回続いたか」を追跡する
+        if m["name"] in desk_names:
+            assigned_role = "desk"
+        elif m["name"] in stage_names:
+            assigned_role = "stage"
+        else:
+            assigned_role = None
+        if assigned_role is not None:
+            if m.get("last_role") == assigned_role:
+                m["role_streak"] = m.get("role_streak", 0) + 1
+            else:
+                m["role_streak"] = 1
+            m["last_role"] = assigned_role
+            if m["role_streak"] > m.get("max_role_streak", 0):
+                m["max_role_streak"] = m["role_streak"]
 
     band_result = {"卓": desk_names, "ステージ": stage_names}
 
@@ -521,13 +598,18 @@ def _candidate_quality(infeasible_count, band_team_sizes, members):
     """
     候補案の良さを比較するためのスコア（小さいほど良い）
     1) 成立しなかったバンド数が少ない方が良い
-    2) バンドごとの人数がバンド間で均されている方が良い（標準偏差が小さい）
-    3) メンバー間の配置回数の偏りが少ない方が良い（標準偏差が小さい）
+    2) 同一役割への連続配置が3回を超えているメンバーが少ない・超過幅が小さい方が良い
+       （卓・ステージのどちらかが0回のまま偏るのは許容するため、ここでは評価しない）
+    3) バンドごとの人数がバンド間で均されている方が良い（標準偏差が小さい）
+    4) メンバー間の配置回数の偏りが少ない方が良い（標準偏差が小さい）
     """
+    consecutive_overrun = sum(
+        max(0, m.get("max_role_streak", 0) - CONSECUTIVE_ROLE_LIMIT) for m in members
+    )
     balance = statistics.pstdev(band_team_sizes) if len(band_team_sizes) > 1 else 0.0
     counts = [m["count"] for m in members]
     fairness = statistics.pstdev(counts) if len(counts) > 1 else 0.0
-    return (infeasible_count, balance, fairness)
+    return (infeasible_count, consecutive_overrun, balance, fairness)
 
 
 def generate_pa_shift(timetable, members_data, day_num=None, config=None):
@@ -535,8 +617,11 @@ def generate_pa_shift(timetable, members_data, day_num=None, config=None):
     PAシフトを作成する関数（v4）
     - NG時間は部分一致（1分でも被れば除外）で判定
     - 卓・ステージの成立条件はロールベース：スキル3以上のリーダーを最低1名含むことが必須
+    - 同一役割（卓/ステージ）への連続配置は3回までに抑えつつ、上限に達するまではできれば
+      2回以上連続するよう後押しする（卓・ステージのどちらかが0回のまま偏るのはOK）
     - 優先度にランダムな揺らぎを加えた複数パターンを生成し、
-      「成立バンド数が多い」→「バンド間の人数の均一性が高い」→「配置回数の公平性が高い」
+      「成立バンド数が多い」→「連続配置の超過が少ない」→
+      「バンド間の人数の均一性が高い」→「配置回数の公平性が高い」
       の順で最も良い案を採用する
     """
     if config is None:
@@ -609,6 +694,8 @@ def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
     - ng_times は日別dictのまま非破壊で参照する（2日目以降もNG時間が正しく効く）
     - 卓・ステージの成立条件はロールベース：スキル3以上のリーダーを最低1名含むことが必須
     - 配置回数の上限（shift_limit）・個人/学年別の配置上限は「全日程を通じた合計」で管理する
+    - 同一役割（卓/ステージ）への連続配置は日をまたいでも3回までに抑えつつ、上限に達するまでは
+      できれば2回以上連続するよう後押しする（卓・ステージのどちらかが0回のまま偏るのはOK）
     - 優先度にランダムな揺らぎを加えた複数パターンを全日程分通しで生成し、最も良い案を採用する
     """
     if config is None:
