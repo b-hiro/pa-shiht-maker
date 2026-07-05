@@ -34,6 +34,15 @@ CONSECUTIVE_ROLE_PENALTY = 10000
 # 同一役割へまだ上限に達していない範囲で連続させるための優先度ボーナス
 # （1バンドごとに役割が頻繁に入れ替わるのを避け、できれば2回以上連続するように後押しする）
 ROLE_CONTINUITY_BONUS = 15
+# 卓/ステージそれぞれの累計配置回数の差に応じて優先度を補正する重み。
+# 「stage_count - desk_count」（卓側）／「desk_count - stage_count」（ステージ側）に掛けることで、
+# 片方の役割ばかりに偏っているメンバーには、まだ経験が少ない方の役割の優先度を上げる
+# （卓4回・ステージ0回のような極端な役割の型よりを緩和する）
+ROLE_BALANCE_WEIGHT = 8
+# 直前のバンドで連続して働いていたメンバーが、直前と異なる役割に切り替わるのを抑制するペナルティ。
+# 卓→ステージ／ステージ→卓のように、連続勤務中にバンドごとジグザグに役割が入れ替わるのを避けるため、
+# 直前と異なる役割の優先度からこの値を引く（直前と同じ役割にはこのペナルティは適用されない）
+ROLE_SWITCH_PENALTY = 25
 
 # 複数パターンを生成し最良案を選ぶ際の試行回数（リクエストの candidate_count で上書き可）
 DEFAULT_CANDIDATE_COUNT = 12
@@ -402,7 +411,16 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
       （shift_limitと同様、ハード除外はせず他に候補がいない場合の最終手段として許容する）
     - 逆に、まだ上限（3回）に達していない範囲では同じ役割を連続させる優先度を少し上げ、
       1バンドごとに役割が頻繁に入れ替わるのを避け、できれば2回以上連続するように後押しする
-      （卓・ステージのどちらかが最終的に0回になっても構わない。偏り自体は許容する）
+      （連続を後押しするだけなので、下のロールバランス補正と合わせて「まとまりつつも
+      最終的には両役割を経験する」形に寄せる）
+    - 卓・ステージそれぞれの優先度に、もう一方の役割の累計配置回数（desk_count/stage_count）
+      との差を反映する（ROLE_BALANCE_WEIGHT）。ステージ経験が多く卓経験が少ないメンバーは
+      卓の優先度が上がり、逆に卓ばかりのメンバーは卓の優先度が下がる。これにより
+      「卓ばかり／ステージばかり」という極端な役割の偏りが緩和される
+    - 直前のバンドで連続して働いていたメンバーが、直前と異なる役割に切り替わる優先度を
+      下げる（ROLE_SWITCH_PENALTY）。これにより、連続勤務中に卓→ステージ→卓...のように
+      バンドごとジグザグに役割が入れ替わるのを避け、連続勤務中はなるべく同じ役割にとどまる
+      ようにする（役割継続ボーナスと組み合わさることで効果が強まる）
 
     shift_limit（配置回数の目安上限）は候補から除外するハード制約ではなく、
     優先度を大きく下げるペナルティとして扱う。これにより、他に候補がいない場合は
@@ -440,6 +458,15 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             return ROLE_CONTINUITY_BONUS
         return 0
 
+    def role_switch_penalty(m, role):
+        # 直前のバンドで連続して働いており（prev_assignedに含まれる）、かつ直前の役割が
+        # 今回スコアリングしている役割と異なる場合にペナルティを課す。
+        # 連続勤務のたびに卓→ステージ→卓...とジグザグに入れ替わるのを避け、
+        # 一度どちらかの役割に入ったら、連続勤務中はその役割にとどまりやすくする
+        if m["name"] in prev_assigned and m.get("last_role") is not None and m.get("last_role") != role:
+            return ROLE_SWITCH_PENALTY
+        return 0
+
     # 卓チーム編成
     available_desk = []
     for m in members:
@@ -459,6 +486,9 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         priority_desk -= over_limit_penalty(m)
         priority_desk -= consecutive_role_penalty(m, "desk")
         priority_desk += role_continuity_bonus(m, "desk")
+        priority_desk -= role_switch_penalty(m, "desk")
+        # ステージ経験が卓経験より多いほど卓の優先度を上げ、逆に卓ばかりなら下げる
+        priority_desk += (m["stage_count"] - m["desk_count"]) * ROLE_BALANCE_WEIGHT
         priority_desk += rng.uniform(0, PRIORITY_JITTER)
 
         candidate = m.copy()
@@ -492,6 +522,9 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         priority_stage -= over_limit_penalty(m)
         priority_stage -= consecutive_role_penalty(m, "stage")
         priority_stage += role_continuity_bonus(m, "stage")
+        priority_stage -= role_switch_penalty(m, "stage")
+        # 卓経験がステージ経験より多いほどステージの優先度を上げ、逆にステージばかりなら下げる
+        priority_stage += (m["desk_count"] - m["stage_count"]) * ROLE_BALANCE_WEIGHT
         priority_stage += rng.uniform(0, PRIORITY_JITTER)
 
         candidate = m.copy()
