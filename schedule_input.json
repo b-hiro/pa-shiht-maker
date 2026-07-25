@@ -1,0 +1,20 @@
+{
+  "num_days": 1,
+  "days": [
+    {
+      "day_number": 1,
+      "start_time": "13:30",
+      "bands": [
+        "yonige",
+        "ASIAN KUNG-FU GENERATION",
+        "The Birthday",
+        "My Chemical Romance"
+      ],
+      "rh_mins": 30,
+      "act_mins": 15,
+      "break_after_band": "ASIAN KUNG-FU GENERATION",
+      "break_duration": 45
+    }
+  ],
+  "members": []
+}

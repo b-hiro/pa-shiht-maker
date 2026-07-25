@@ -522,7 +522,7 @@
                         </div>
                     </div>
 
-                    <div class="grid-2">
+                    <div class="grid-3">
                         <div class="form-group">
                             <label>🙋 個人の卓配置回数上限（全日程合計）</label>
                             <select id="deskLimitPerMember"></select>
@@ -530,6 +530,10 @@
                         <div class="form-group">
                             <label>🙋 個人のステージ配置回数上限（全日程合計）</label>
                             <select id="stageLimitPerMember"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>🙋 個人の卓+ステージ合計配置回数上限（全日程合計）</label>
+                            <select id="totalLimitPerMember"></select>
                         </div>
                     </div>
 
@@ -543,13 +547,26 @@
                         <div id="gradeLimitsContainer" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa;">
                             <p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>
                         </div>
-                        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-                            <input type="text" id="gradeLimitGrade" placeholder="学年（例：1）" style="flex: 1; min-width: 100px;">
-                            <select id="gradeLimitDeskMax" style="flex: 1; min-width: 100px;"></select>
-                            <select id="gradeLimitStageMax" style="flex: 1; min-width: 100px;"></select>
+                        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; align-items: flex-end;">
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 11px; color: #666;">学年</label>
+                                <input type="text" id="gradeLimitGrade" placeholder="例：1">
+                            </div>
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 11px; color: #666;">卓</label>
+                                <select id="gradeLimitDeskMax"></select>
+                            </div>
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 11px; color: #666;">ステージ</label>
+                                <select id="gradeLimitStageMax"></select>
+                            </div>
+                            <div style="flex: 1; min-width: 100px;">
+                                <label style="font-size: 11px; color: #666;">卓+ステージ合計</label>
+                                <select id="gradeLimitTotalMax"></select>
+                            </div>
                             <button type="button" class="btn-secondary" onclick="addGradeLimit()">+ 追加</button>
                         </div>
-                        <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージどちらか一方だけの指定も可能です（メンバーに「学年」を設定した場合のみ有効）</p>
+                        <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージ・合計のいずれか1つ以上を指定してください（メンバーに「学年」を設定した場合のみ有効）</p>
                     </div>
                 </details>
 
@@ -738,7 +755,7 @@
             numDays: 1,
             days: [],
             members: [],
-            gradeLimits: {}, // { "1": { desk_max: 8, stage_max: 6 }, ... }
+            gradeLimits: {}, // { "1": { desk_max: 8, stage_max: 6, total_max: 10 }, ... }
             generatedTimetableMulti: null,
             generatedShift: null,
             infeasibleByDay: {} // { "day_1": [ {band, desk_has_leader, stage_has_leader, reason, ...}, ... ], ... }
@@ -901,6 +918,7 @@
             setInputValue('stageMaxMembers', data.stage_max_members);
             setInputValue('deskLimitPerMember', data.desk_limit_per_member);
             setInputValue('stageLimitPerMember', data.stage_limit_per_member);
+            setInputValue('totalLimitPerMember', data.total_limit_per_member);
             setInputValue('candidateCount', data.candidate_count);
 
             appData.gradeLimits = (data.grade_limits && typeof data.grade_limits === 'object')
@@ -1332,9 +1350,10 @@
                 const limits = appData.gradeLimits[grade] || {};
                 const deskMax = (limits.desk_max === undefined || limits.desk_max === null) ? '無制限' : `${limits.desk_max} 回`;
                 const stageMax = (limits.stage_max === undefined || limits.stage_max === null) ? '無制限' : `${limits.stage_max} 回`;
+                const totalMax = (limits.total_max === undefined || limits.total_max === null) ? '無制限' : `${limits.total_max} 回`;
                 return `
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee;">
-                        <span>🎓 <strong>${grade}</strong> ： 卓 ${deskMax} / ステージ ${stageMax}</span>
+                        <span>🎓 <strong>${grade}</strong> ： 卓 ${deskMax} / ステージ ${stageMax} / 合計 ${totalMax}</span>
                         <button type="button" class="btn-secondary" style="padding: 6px 14px;" onclick="removeGradeLimit('${grade}')">🗑️ 削除</button>
                     </div>
                 `;
@@ -1345,6 +1364,7 @@
             const gradeInput = document.getElementById('gradeLimitGrade');
             const deskInput = document.getElementById('gradeLimitDeskMax');
             const stageInput = document.getElementById('gradeLimitStageMax');
+            const totalInput = document.getElementById('gradeLimitTotalMax');
 
             const grade = gradeInput.value.trim();
             if (!grade) {
@@ -1355,9 +1375,10 @@
             const limits = {};
             if (deskInput.value.trim() !== '') limits.desk_max = parseInt(deskInput.value);
             if (stageInput.value.trim() !== '') limits.stage_max = parseInt(stageInput.value);
+            if (totalInput.value.trim() !== '') limits.total_max = parseInt(totalInput.value);
 
-            if (limits.desk_max === undefined && limits.stage_max === undefined) {
-                alert('卓・ステージのどちらか一方の上限を入力してください');
+            if (limits.desk_max === undefined && limits.stage_max === undefined && limits.total_max === undefined) {
+                alert('卓・ステージ・合計のいずれか1つ以上の上限を入力してください');
                 return;
             }
 
@@ -1366,6 +1387,7 @@
             gradeInput.value = '';
             deskInput.value = '';
             stageInput.value = '';
+            totalInput.value = '';
 
             renderGradeLimits();
         }
@@ -1656,6 +1678,8 @@
                 buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
             document.getElementById('stageLimitPerMember').innerHTML =
                 buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
+            document.getElementById('totalLimitPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
 
             document.getElementById('candidateCount').innerHTML =
                 buildNumberOptions('', rangeValues(1, 50, 1), 'デフォルト: 12');
@@ -1663,6 +1687,8 @@
             document.getElementById('gradeLimitDeskMax').innerHTML =
                 buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
             document.getElementById('gradeLimitStageMax').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
+            document.getElementById('gradeLimitTotalMax').innerHTML =
                 buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
         }
 
@@ -1703,6 +1729,9 @@
 
             const stageLimitPerMember = getValue('stageLimitPerMember');
             if (stageLimitPerMember !== '') config.stage_limit_per_member = parseInt(stageLimitPerMember);
+
+            const totalLimitPerMember = getValue('totalLimitPerMember');
+            if (totalLimitPerMember !== '') config.total_limit_per_member = parseInt(totalLimitPerMember);
 
             const candidateCount = getValue('candidateCount');
             if (candidateCount !== '') config.candidate_count = parseInt(candidateCount);

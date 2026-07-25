@@ -239,11 +239,18 @@ def parse_shift_config(data):
         "stage_max_members": data.get("stage_max_members"),
         "desk_limit_per_member": data.get("desk_limit_per_member"),
         "stage_limit_per_member": data.get("stage_limit_per_member"),
+        "total_limit_per_member": data.get("total_limit_per_member"),
         "grade_limits": data.get("grade_limits", {}) or {},
         "candidate_count": data.get("candidate_count", DEFAULT_CANDIDATE_COUNT),
     }
 
-    for field in ("desk_max_members", "stage_max_members", "desk_limit_per_member", "stage_limit_per_member"):
+    for field in (
+        "desk_max_members",
+        "stage_max_members",
+        "desk_limit_per_member",
+        "stage_limit_per_member",
+        "total_limit_per_member",
+    ):
         error = _validate_optional_non_negative_int(config[field], field)
         if error:
             return None, error
@@ -258,7 +265,7 @@ def parse_shift_config(data):
     for grade_key, limits in config["grade_limits"].items():
         if not isinstance(limits, dict):
             return None, f"grade_limits['{grade_key}'] はオブジェクトである必要があります"
-        for role_key in ("desk_max", "stage_max"):
+        for role_key in ("desk_max", "stage_max", "total_max"):
             if role_key in limits:
                 error = _validate_optional_non_negative_int(
                     limits.get(role_key), f"grade_limits['{grade_key}'].{role_key}"
@@ -355,6 +362,22 @@ def _grade_role_limit_ok(member, role, grade_totals, config):
     return grade_totals[role][grade_key] < limit
 
 
+def _grade_total_limit_ok(member, grade_totals, config):
+    """
+    学年ごとの卓+ステージ合計配置上限（grade_limits[grade].total_max）を超えていないか
+    """
+    grade_key = _member_grade_key(member)
+    if grade_key is None:
+        return True
+    limits = config.get("grade_limits", {}).get(grade_key)
+    if not limits:
+        return True
+    limit = limits.get("total_max")
+    if limit is None:
+        return True
+    return grade_totals["total"][grade_key] < limit
+
+
 def _select_team_with_leader(candidates, skill_field, max_members, assistant_only_fill=False):
     """
     priority降順でソート済みの候補リストから、
@@ -430,6 +453,7 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
     stage_max_members = config.get("stage_max_members", DEFAULT_STAGE_MAX_MEMBERS)
     desk_limit_per_member = config.get("desk_limit_per_member")
     stage_limit_per_member = config.get("stage_limit_per_member")
+    total_limit_per_member = config.get("total_limit_per_member")
 
     def base_eligible(m):
         # NG判定①：自分が出演するバンド、またはその「前後」ならシフト不可
@@ -474,7 +498,11 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             continue
         if desk_limit_per_member is not None and m["desk_count"] >= desk_limit_per_member:
             continue
+        if total_limit_per_member is not None and m["count"] >= total_limit_per_member:
+            continue
         if not _grade_role_limit_ok(m, "desk", grade_totals, config):
+            continue
+        if not _grade_total_limit_ok(m, grade_totals, config):
             continue
 
         priority_desk = -m["count"] * 10
@@ -510,7 +538,11 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             continue
         if stage_limit_per_member is not None and m["stage_count"] >= stage_limit_per_member:
             continue
+        if total_limit_per_member is not None and m["count"] >= total_limit_per_member:
+            continue
         if not _grade_role_limit_ok(m, "stage", grade_totals, config):
+            continue
+        if not _grade_total_limit_ok(m, grade_totals, config):
             continue
 
         priority_stage = -m["count"] * 10
@@ -541,6 +573,9 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
     for m in members:
         if m["name"] in assigned_names:
             m["count"] += 1
+            grade_key = _member_grade_key(m)
+            if grade_key is not None:
+                grade_totals["total"][grade_key] += 1
         if m["name"] in desk_names:
             m["desk_count"] += 1
             grade_key = _member_grade_key(m)
@@ -671,7 +706,7 @@ def generate_pa_shift(timetable, members_data, day_num=None, config=None):
     best = None
     for i in range(candidate_count):
         members_state = normalize_members(copy.deepcopy(members_data))
-        grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int)}
+        grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int), "total": defaultdict(int)}
         candidate_rng = _ZERO_JITTER if i == 0 else rng
 
         day_shift, infeasible_bands, band_team_sizes = _run_day_core(
@@ -746,7 +781,7 @@ def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
     best = None
     for i in range(candidate_count):
         members_state = normalize_members(copy.deepcopy(members_data))
-        grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int)}
+        grade_totals = {"desk": defaultdict(int), "stage": defaultdict(int), "total": defaultdict(int)}
         candidate_rng = _ZERO_JITTER if i == 0 else rng
 
         shift_result = {}
