@@ -24,9 +24,21 @@ LEADER_SKILL_LEVEL = 3
 DEFAULT_DESK_MAX_MEMBERS = 2
 DEFAULT_STAGE_MAX_MEMBERS = 2
 CONTINUITY_BONUS = 20
-# shift_limit（配置回数の目安上限）を超えたメンバーを候補から除外せず、
-# 優先度を大きく下げた「予備要員」として残すためのペナルティ幅
-OVER_SHIFT_LIMIT_PENALTY = 10000
+# 「進行度（イベント全体を通して今何バンド目まで進んだか）」に対して、本来この時点までに
+# 配置されているべき目安回数（ペース目標 = shift_limit × 経過割合）からどれだけ
+# 前倒しで進みすぎているか（オーバー分）を計算し、それに応じて優先度を調整する。
+# 総量（shift_limit）だけを見る旧方式だと、序盤に集中して使われても「まだ全体の上限に
+# 達していない」うちはペナルティが働かず、少人数の候補が前半に固まって使い切られてしまう
+# 問題があったため、「今の時点でのペースを超えていないか」を都度チェックする方式にした。
+# ここまでは許容する前倒し幅（このオーバー幅までは特にペナルティを付けない）
+PACE_SOFT_OVERAGE = 1.0
+# ソフト超過1につき優先度から差し引く重み（ハード除外はしない・あくまで優先度調整）
+PACE_OVERAGE_PENALTY_WEIGHT = 300
+# アシスタント（そのロールでリーダーになれないスキルの人）がここまで進みすぎている場合は、
+# そのロールの候補からハード除外し、強制的に休ませる（＝中盤・後半に出番を持ち越させる）。
+# リーダーになれるスキルの人には適用しない（リーダー不在によるバンド不成立を防ぐため、
+# リーダー候補は進みすぎていても優先度を下げるだけに留める）
+PACE_HARD_OVERAGE = 2.5
 # 同一役割（卓/ステージ）へ連続で配置してよい上限回数。
 # これを超える4回連続以上になる配置は、他に候補がいない場合の最終手段としてのみ許容する
 CONSECUTIVE_ROLE_LIMIT = 3
@@ -378,6 +390,22 @@ def _grade_total_limit_ok(member, grade_totals, config):
     return grade_totals["total"][grade_key] < limit
 
 
+def _pace_overage(count_so_far, band_index, total_bands, shift_limit):
+    """
+    「イベント全体を通した進行度（band_index / total_bands）」に対して、
+    本来この時点までに配置されているべき目安回数（ペース目標）から
+    どれだけ前倒しで進みすぎているかを返す（0以下なら進みすぎていない）。
+
+    band_index は「これまでに処理済みのバンド数」（0始まり・複数日イベントでは
+    日をまたいだ通し番号）、total_bands は「イベント全体の総バンド数」。
+    """
+    if not total_bands or total_bands <= 0 or shift_limit == float("inf"):
+        return 0
+    progress = band_index / total_bands
+    expected_so_far = shift_limit * progress
+    return count_so_far - expected_so_far
+
+
 def _select_team_with_leader(candidates, skill_field, max_members, assistant_only_fill=False):
     """
     priority降順でソート済みの候補リストから、
@@ -416,10 +444,17 @@ def _select_team_with_leader(candidates, skill_field, max_members, assistant_onl
     return team, leader
 
 
-def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members, grade_totals, config, rng, day_num, shift_limit):
+def _assign_band(
+    band, band_slots, prev_band, next_band, prev_assigned, members, grade_totals, config, rng, day_num,
+    shift_limit, band_index, total_bands,
+):
     """
     1バンド分の卓・ステージ担当を決定し、メンバーの状態（count/desk_count/stage_count/
     last_role/role_streak/max_role_streak）と学年別合計（grade_totals）を更新する
+
+    band_index / total_bands は「イベント全体を通して今何バンド目まで進んだか」を表し、
+    進行度ベースのペース管理（下記）に使う（単日イベントなら total_bands=当日のバンド数、
+    複数日イベントなら日をまたいだ通し番号・全日程の総バンド数になる）。
 
     成立条件（ロールベースのハード制約）:
     卓・ステージそれぞれについて「スキル3以上のリーダーを最低1名含むこと」が必須。
@@ -445,9 +480,12 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
       バンドごとジグザグに役割が入れ替わるのを避け、連続勤務中はなるべく同じ役割にとどまる
       ようにする（役割継続ボーナスと組み合わさることで効果が強まる）
 
-    shift_limit（配置回数の目安上限）は候補から除外するハード制約ではなく、
-    優先度を大きく下げるペナルティとして扱う。これにより、他に候補がいない場合は
-    上限を超えたメンバーも「予備要員」として配置できる。
+    shift_limit（配置回数の目安上限）は「今の進行度（band_index / total_bands）」に対する
+    ペース目標として扱う（_pace_overage）。ペースを超えて前倒しで働いているメンバーには
+    優先度ペナルティが付き、さらにそのロールでリーダーになれないスキル（＝アシスタント）の
+    メンバーが大幅に超過している場合は、そのロールの候補からハード除外して強制的に休ませる
+    （中盤・後半に出番を持ち越す）。リーダーになれるスキルのメンバーにはハード除外を適用せず、
+    優先度を下げるだけに留める（リーダー不在によるバンド不成立を防ぐため）。
     """
     desk_max_members = config.get("desk_max_members", DEFAULT_DESK_MAX_MEMBERS)
     stage_max_members = config.get("stage_max_members", DEFAULT_STAGE_MAX_MEMBERS)
@@ -464,9 +502,23 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             return False
         return True
 
-    def over_limit_penalty(m):
-        # shift_limit到達者はハード除外せず、優先度を大きく下げて「予備要員」として残す
-        return OVER_SHIFT_LIMIT_PENALTY if m["count"] >= shift_limit else 0
+    def pace_penalty(m):
+        # 「今何バンド目まで進んだか」に対する目安ペースからどれだけ前倒しで進みすぎて
+        # いるかに応じて優先度を下げる（総量ではなく進行度ベース）。ハード除外はしない
+        # ＝他に候補がいなければ、進みすぎていてもこの人が選ばれる余地は残す。
+        overage = _pace_overage(m["count"], band_index, total_bands, shift_limit)
+        if overage <= PACE_SOFT_OVERAGE:
+            return 0
+        return (overage - PACE_SOFT_OVERAGE) * PACE_OVERAGE_PENALTY_WEIGHT
+
+    def pace_hard_exclude(m, skill_field):
+        # アシスタント（そのロールでリーダーになれないスキル）がペースを大幅に超えて
+        # 進みすぎている場合は、そのロールの候補から完全に除外し、強制的に休ませる。
+        # リーダーになれるスキルの人には適用しない（リーダー不在によるバンド不成立を防ぐ）
+        if m[skill_field] >= LEADER_SKILL_LEVEL:
+            return False
+        overage = _pace_overage(m["count"], band_index, total_bands, shift_limit)
+        return overage > PACE_HARD_OVERAGE
 
     def consecutive_role_penalty(m, role):
         # 同一役割に既に3回連続で入っているメンバーが、さらに同じ役割に入るのを強く抑制する
@@ -504,6 +556,8 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             continue
         if not _grade_total_limit_ok(m, grade_totals, config):
             continue
+        if pace_hard_exclude(m, "skill_desk"):
+            continue
 
         priority_desk = -m["count"] * 10
         if band in m["req_bands"]:
@@ -511,7 +565,7 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         priority_desk += m["skill_desk"]
         if m["name"] in prev_assigned:
             priority_desk += CONTINUITY_BONUS
-        priority_desk -= over_limit_penalty(m)
+        priority_desk -= pace_penalty(m)
         priority_desk -= consecutive_role_penalty(m, "desk")
         priority_desk += role_continuity_bonus(m, "desk")
         priority_desk -= role_switch_penalty(m, "desk")
@@ -544,6 +598,8 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
             continue
         if not _grade_total_limit_ok(m, grade_totals, config):
             continue
+        if pace_hard_exclude(m, "skill_stage"):
+            continue
 
         priority_stage = -m["count"] * 10
         if band in m["req_bands"]:
@@ -551,7 +607,7 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
         priority_stage += m["skill_stage"]
         if m["name"] in prev_assigned:
             priority_stage += CONTINUITY_BONUS
-        priority_stage -= over_limit_penalty(m)
+        priority_stage -= pace_penalty(m)
         priority_stage -= consecutive_role_penalty(m, "stage")
         priority_stage += role_continuity_bonus(m, "stage")
         priority_stage -= role_switch_penalty(m, "stage")
@@ -632,11 +688,17 @@ def _assign_band(band, band_slots, prev_band, next_band, prev_assigned, members,
     return band_result, team_size, infeasible_entry
 
 
-def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, day_num=None):
+def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, day_num=None, band_index_offset=0, total_bands=None):
     """
     1日分のタイムテーブルに対して、バンド順にシフトを組み立てる（コア処理・非候補探索）
+
+    band_index_offset / total_bands は「イベント全体を通した進行度」を計算するために使う。
+    単日イベントでは band_index_offset=0・total_bands=当日のバンド数（省略時は自動算出）、
+    複数日イベントでは呼び出し側が日をまたいだ通し番号と全日程の総バンド数を渡す。
     """
     band_order, band_times = _band_order_and_times(timetable)
+    if total_bands is None:
+        total_bands = len(band_order)
 
     day_shift = {}
     infeasible_bands = []
@@ -653,6 +715,7 @@ def _run_day_core(timetable, members, grade_totals, config, rng, shift_limit, da
         band_result, team_size, infeasible_entry = _assign_band(
             band, band_times[band], prev_band, next_band, prev_assigned,
             members, grade_totals, config, rng, day_num, shift_limit,
+            band_index_offset + i, total_bands,
         )
         day_shift[band] = band_result
         band_team_sizes.append(team_size)
@@ -687,6 +750,9 @@ def generate_pa_shift(timetable, members_data, day_num=None, config=None):
     - 卓・ステージの成立条件はロールベース：スキル3以上のリーダーを最低1名含むことが必須
     - 同一役割（卓/ステージ）への連続配置は3回までに抑えつつ、上限に達するまではできれば
       2回以上連続するよう後押しする（卓・ステージのどちらかが0回のまま偏るのはOK）
+    - 配置回数は「イベント全体の進行度に対するペース」で管理し、ペースを超えて前倒しで
+      働いているアシスタント（そのロールでリーダーになれないスキルの人）は、大幅に超過
+      すると一時的に候補から除外して休ませる（特定の人が序盤に集中するのを防ぐ）
     - 優先度にランダムな揺らぎを加えた複数パターンを生成し、
       「成立バンド数が多い」→「連続配置の超過が少ない」→
       「バンド間の人数の均一性が高い」→「配置回数の公平性が高い」
@@ -710,7 +776,8 @@ def generate_pa_shift(timetable, members_data, day_num=None, config=None):
         candidate_rng = _ZERO_JITTER if i == 0 else rng
 
         day_shift, infeasible_bands, band_team_sizes = _run_day_core(
-            timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num
+            timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num,
+            band_index_offset=0, total_bands=num_bands,
         )
         quality = _candidate_quality(len(infeasible_bands), band_team_sizes, members_state)
         if best is None or quality < best[0]:
@@ -764,6 +831,9 @@ def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
     - 配置回数の上限（shift_limit）・個人/学年別の配置上限は「全日程を通じた合計」で管理する
     - 同一役割（卓/ステージ）への連続配置は日をまたいでも3回までに抑えつつ、上限に達するまでは
       できれば2回以上連続するよう後押しする（卓・ステージのどちらかが0回のまま偏るのはOK）
+    - 配置回数は「全日程を通した進行度に対するペース」で管理する（日をまたいだ通し番号で
+      判定するため、特定の1日だけに特定のメンバーが集中する偏りも抑制される）。ペースを
+      超えて前倒しで働いているアシスタントは、大幅に超過すると一時的に候補から除外して休ませる
     - 優先度にランダムな揺らぎを加えた複数パターンを全日程分通しで生成し、最も良い案を採用する
     """
     if config is None:
@@ -787,12 +857,15 @@ def generate_pa_shift_multi_day(timetable_multi, members_data, config=None):
         shift_result = {}
         infeasible_days = {}
         all_band_team_sizes = []
+        band_index_offset = 0
 
         for day_key, timetable in sorted_days:
             day_num = day_sort_key(day_key)
             day_shift, infeasible_bands, band_team_sizes = _run_day_core(
-                timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num
+                timetable, members_state, grade_totals, config, candidate_rng, shift_limit, day_num,
+                band_index_offset=band_index_offset, total_bands=total_bands,
             )
+            band_index_offset += len(band_team_sizes)
             shift_result[day_key] = day_shift
             all_band_team_sizes.extend(band_team_sizes)
             if infeasible_bands:
