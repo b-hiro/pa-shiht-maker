@@ -12,6 +12,7 @@
         }
 
         body {
+            position: relative;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
@@ -21,7 +22,18 @@
             padding: 20px;
         }
 
+        #bgEmojiCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
         .container {
+            position: relative;
+            z-index: 1;
             background: white;
             border-radius: 15px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -439,6 +451,7 @@
     </style>
 </head>
 <body>
+    <canvas id="bgEmojiCanvas" aria-hidden="true"></canvas>
     <div class="container">
         <!-- ステップインジケーター -->
         <div class="step-indicator">
@@ -2188,6 +2201,144 @@
             updateMemberNgTimesUI();
             renderGradeLimits();
         });
+    </script>
+
+    <!--
+        背景演出（にこちゃんマークが跳ね回る）。
+        本体のシフト生成ロジックとは完全に独立したIIFEで、
+        画面の一番背面（z-index: -1, pointer-events: none）に描画するだけなので、
+        既存の入力・ボタン・API呼び出しには一切干渉しない。
+    -->
+    <script>
+    (function() {
+        var canvas = document.getElementById('bgEmojiCanvas');
+        if (!canvas || !canvas.getContext) return;
+
+        var reduceMotion = window.matchMedia &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduceMotion) return;
+
+        var ctx = canvas.getContext('2d');
+        var DPR = Math.min(window.devicePixelRatio || 1, 2);
+        var faces = [];
+        var FACE_COUNT = 13;
+
+        var PASTEL_COLORS = [
+            '#FFD6E8', '#FFF3B0', '#C8F4DE', '#C9E4FF',
+            '#E4D6FF', '#FFE0C2', '#D6FFF6', '#FFD6D6'
+        ];
+
+        function randomPastel(exclude) {
+            var choices = PASTEL_COLORS.filter(function(c) { return c !== exclude; });
+            return choices[Math.floor(Math.random() * choices.length)];
+        }
+
+        function resizeCanvas() {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            canvas.width = w * DPR;
+            canvas.height = h * DPR;
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        }
+
+        function createFace() {
+            var r = 26 + Math.random() * 20;
+            return {
+                x: Math.random() * Math.max(1, window.innerWidth - 2 * r) + r,
+                y: Math.random() * Math.max(1, window.innerHeight - 2 * r) + r,
+                r: r,
+                vx: (Math.random() - 0.5) * 2.4 || 0.8,
+                vy: (Math.random() - 0.5) * 2.4 || 0.8,
+                color: randomPastel(null)
+            };
+        }
+
+        function initFaces() {
+            faces = [];
+            for (var i = 0; i < FACE_COUNT; i++) {
+                faces.push(createFace());
+            }
+        }
+
+        function drawSmiley(f) {
+            var x = f.x, y = f.y, r = f.r;
+
+            // 顔
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = f.color;
+            ctx.fill();
+            ctx.lineWidth = Math.max(1, r * 0.08);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.stroke();
+
+            // 目
+            var eyeOffsetX = r * 0.35;
+            var eyeOffsetY = r * 0.2;
+            var eyeR = Math.max(1.5, r * 0.09);
+            ctx.fillStyle = 'rgba(60, 50, 60, 0.75)';
+            ctx.beginPath();
+            ctx.arc(x - eyeOffsetX, y - eyeOffsetY, eyeR, 0, Math.PI * 2);
+            ctx.arc(x + eyeOffsetX, y - eyeOffsetY, eyeR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 口（にこちゃんの弧）
+            ctx.beginPath();
+            ctx.arc(x, y + r * 0.05, r * 0.5, Math.PI * 0.12, Math.PI * 0.88, false);
+            ctx.lineWidth = Math.max(1.5, r * 0.1);
+            ctx.strokeStyle = 'rgba(60, 50, 60, 0.75)';
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+
+        function step() {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            ctx.clearRect(0, 0, w, h);
+
+            for (var i = 0; i < faces.length; i++) {
+                var f = faces[i];
+                f.x += f.vx;
+                f.y += f.vy;
+
+                if (f.x - f.r <= 0) {
+                    f.x = f.r;
+                    f.vx *= -1;
+                    f.color = randomPastel(f.color);
+                } else if (f.x + f.r >= w) {
+                    f.x = w - f.r;
+                    f.vx *= -1;
+                    f.color = randomPastel(f.color);
+                }
+
+                if (f.y - f.r <= 0) {
+                    f.y = f.r;
+                    f.vy *= -1;
+                    f.color = randomPastel(f.color);
+                } else if (f.y + f.r >= h) {
+                    f.y = h - f.r;
+                    f.vy *= -1;
+                    f.color = randomPastel(f.color);
+                }
+
+                drawSmiley(f);
+            }
+
+            window.requestAnimationFrame(step);
+        }
+
+        var resizeTimer = null;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(resizeCanvas, 150);
+        });
+
+        resizeCanvas();
+        initFaces();
+        window.requestAnimationFrame(step);
+    })();
     </script>
 </body>
 </html>

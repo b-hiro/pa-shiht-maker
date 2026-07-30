@@ -68,6 +68,13 @@ ROLE_BALANCE_WEIGHT = 8
 # 直前と異なる役割の優先度からこの値を引く（直前と同じ役割にはこのペナルティは適用されない）
 ROLE_SWITCH_PENALTY = 25
 
+# /api/estimate-limits がおすすめする「卓+ステージ合計配置回数上限」は、
+# 卓・ステージそれぞれのリーダー1人あたり目安回数の単純合計に、この倍率をかけて切り上げる。
+# 単純合計ちょうど（倍率1.0）だと、NG条件などで一部の人に負担が偏った際にすぐ上限へ
+# 抵触してしまい、「リーダー候補が不足している可能性があります」というエラーが起きやすいため、
+# 少し余裕を持たせている。
+TOTAL_LIMIT_SUGGESTION_MARGIN = 1.5
+
 # 複数パターンを生成し最良案を選ぶ際の試行回数（リクエストの candidate_count で上書き可）
 DEFAULT_CANDIDATE_COUNT = 12
 MAX_CANDIDATE_COUNT = 50
@@ -671,7 +678,12 @@ def _assign_band(
         if pace_hard_exclude(m, "desk", "skill_desk"):
             continue
 
-        priority_desk = -m["count"] * 10
+        # 「これまで卓に何回入ったか」だけを見て優先度を下げる（卓+ステージの合計回数では
+        # なく卓回数そのもの）。合計回数で下げてしまうと、卓のアシスタント予約枠で頻繁に
+        # 卓へ配置される初心者ほど合計回数が早く積み上がり、結果としてステージの優先度まで
+        # 一緒に下がってしまい、いつまで経ってもステージに回れなくなる（下のロールバランス
+        # 補正と効果が矛盾してしまう）ため、卓は卓回数、ステージはステージ回数で判定する。
+        priority_desk = -m["desk_count"] * 10
         if band in m["req_bands"]:
             priority_desk += 100
         priority_desk += m["skill_desk"]
@@ -713,10 +725,20 @@ def _assign_band(
         if pace_hard_exclude(m, "stage", "skill_stage"):
             continue
 
-        priority_stage = -m["count"] * 10
+        # 卓と同様に、合計回数ではなく「これまでステージに何回入ったか」だけで優先度を下げる。
+        # 卓のアシスタント予約枠で卓回数（＝合計回数）が多くなりがちな初心者が、合計回数基準の
+        # 減点によってステージの優先度まで下げられてしまうと、ステージにはいつまでも回って
+        # こなくなる（下のロールバランス補正で押し上げても、この減点で相殺されてしまう）。
+        priority_stage = -m["stage_count"] * 10
         if band in m["req_bands"]:
             priority_stage += 100
-        priority_stage += m["skill_stage"]
+        # 卓と違い、ここに priority_desk のような「+m['skill_stage']」（スキル値そのままの加点）は
+        # 入れない。ステージはリーダー確保後の残り枠を「スキルを問わず優先度順」で補充する方針
+        # のため、もしスキル値を直接加点すると、スキル3以上の人が常にスキル1〜2の人より
+        # 2〜4点も有利になってしまい、リーダー確保後の枠がほぼ常に別のリーダー候補で
+        # 埋まってしまう（初心者がステージにほとんど配置されない）という偏りの原因になっていた。
+        # スキル差はリーダー成立条件（最低1名は必須）だけで担保し、残り枠は継続性・役割バランス・
+        # ペース・公平性などスキル以外の要素だけで、スキル3以上の人と初心者を同列に競わせる。
         if m["name"] in prev_assigned:
             priority_stage += CONTINUITY_BONUS
         priority_stage -= pace_penalty(m, "stage", "skill_stage")
@@ -1330,7 +1352,7 @@ def api_estimate_limits():
             "suggested_desk_limit_per_member": _suggest_ceiling(desk["leader_avg"]),
             "suggested_stage_limit_per_member": _suggest_ceiling(stage["leader_avg"]),
             "suggested_total_limit_per_member": _suggest_ceiling(
-                (desk["leader_avg"] or 0) + (stage["leader_avg"] or 0)
+                ((desk["leader_avg"] or 0) + (stage["leader_avg"] or 0)) * TOTAL_LIMIT_SUGGESTION_MARGIN
             ),
         }
         return jsonify(response)
