@@ -494,82 +494,6 @@
                     <div id="dayContents"></div>
                 </div>
 
-                <!-- 詳細設定（任意） -->
-                <details style="margin-top: 30px; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #333;">⚙️ 詳細設定（任意・省略可）</summary>
-
-                    <div class="comment" style="margin-top: 15px;">
-                        <strong>💡 詳細設定について:</strong>
-                        すべて省略可能です。空欄のままなら従来通りの動作になります。
-                    </div>
-
-                    <div class="comment" style="margin-top: 0; margin-bottom: 15px;">
-                        <strong>💡 成立条件について:</strong>
-                        卓・ステージとも「スキル3以上のリーダーを最低1名含むこと」が必須です。
-                        リーダーを確保できないバンドは成立不可（エラー）として扱われます。
-                        卓は「リーダー1名＋アシスタント1名」が基本形で、アシスタント候補がいない場合はリーダー1名のみでも成立とみなします（リーダーを2名重複配置しません）。
-                        ステージはリーダー確保後、人数上限までスキルを問わず優先度順に補充します。
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label>👥 卓の人数上限（リーダー含む・1バンドあたり）</label>
-                            <select id="deskMaxMembers"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>👥 ステージの人数上限（リーダー含む・1バンドあたり）</label>
-                            <select id="stageMaxMembers"></select>
-                        </div>
-                    </div>
-
-                    <div class="grid-3">
-                        <div class="form-group">
-                            <label>🙋 個人の卓配置回数上限（全日程合計）</label>
-                            <select id="deskLimitPerMember"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>🙋 個人のステージ配置回数上限（全日程合計）</label>
-                            <select id="stageLimitPerMember"></select>
-                        </div>
-                        <div class="form-group">
-                            <label>🙋 個人の卓+ステージ合計配置回数上限（全日程合計）</label>
-                            <select id="totalLimitPerMember"></select>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>🔀 生成パターン数（多いほど良い組み合わせを探索・最大50）</label>
-                        <select id="candidateCount"></select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>🎓 学年ごとの配置回数上限（全日程合計）</label>
-                        <div id="gradeLimitsContainer" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa;">
-                            <p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>
-                        </div>
-                        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; align-items: flex-end;">
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 11px; color: #666;">学年</label>
-                                <input type="text" id="gradeLimitGrade" placeholder="例：1">
-                            </div>
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 11px; color: #666;">卓</label>
-                                <select id="gradeLimitDeskMax"></select>
-                            </div>
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 11px; color: #666;">ステージ</label>
-                                <select id="gradeLimitStageMax"></select>
-                            </div>
-                            <div style="flex: 1; min-width: 100px;">
-                                <label style="font-size: 11px; color: #666;">卓+ステージ合計</label>
-                                <select id="gradeLimitTotalMax"></select>
-                            </div>
-                            <button type="button" class="btn-secondary" onclick="addGradeLimit()">+ 追加</button>
-                        </div>
-                        <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージ・合計のいずれか1つ以上を指定してください（メンバーに「学年」を設定した場合のみ有効）</p>
-                    </div>
-                </details>
-
                 <!-- ナビゲーションボタン -->
                 <div class="button-group">
                     <button type="button" class="btn-primary" onclick="goToPage(2)">
@@ -701,6 +625,85 @@
                 </div>
             </div>
 
+            <!-- 詳細設定（任意） -->
+            <details style="margin-bottom: 25px; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+                <summary style="cursor: pointer; font-weight: 600; color: #333;">⚙️ 詳細設定（任意・省略可）</summary>
+
+                <div class="comment" style="margin-top: 15px;">
+                    <strong>💡 詳細設定について:</strong>
+                    すべて省略可能です。空欄のままなら従来通りの動作になります。
+                    登録済みのバンド数・メンバー構成をもとに、下記の配置回数上限には目安の値を自動で入力しています（手動で変更した項目はそのまま保持されます）。
+                </div>
+
+                <div class="comment" style="margin-top: 0; margin-bottom: 15px;">
+                    <strong>💡 成立条件について:</strong>
+                    卓・ステージとも「スキル3以上のリーダーを最低1名含むこと」が必須です。
+                    リーダーを確保できないバンドは成立不可（エラー）として扱われます。
+                    卓は「リーダー1名＋アシスタント1名」が基本形で、アシスタント候補がいない場合はリーダー1名のみでも成立とみなします（リーダーを2名重複配置しません）。
+                    ステージはリーダー確保後、人数上限までスキルを問わず優先度順に補充します。
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>👥 卓の人数上限（リーダー含む・1バンドあたり）</label>
+                        <select id="deskMaxMembers" onchange="updateSuggestedLimits()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>👥 ステージの人数上限（リーダー含む・1バンドあたり）</label>
+                        <select id="stageMaxMembers" onchange="updateSuggestedLimits()"></select>
+                    </div>
+                </div>
+
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>🙋 個人の卓配置回数上限（全日程合計）</label>
+                        <select id="deskLimitPerMember" onchange="markLimitEdited('desk')"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>🙋 個人のステージ配置回数上限（全日程合計）</label>
+                        <select id="stageLimitPerMember" onchange="markLimitEdited('stage')"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>🙋 個人の卓+ステージ合計配置回数上限（全日程合計）</label>
+                        <select id="totalLimitPerMember" onchange="markLimitEdited('total')"></select>
+                    </div>
+                </div>
+
+                <p id="limitsSuggestionNote" style="font-size: 12px; color: #667eea; margin-top: -10px; margin-bottom: 20px; line-height: 1.6;"></p>
+
+                <div class="form-group">
+                    <label>🔀 生成パターン数（多いほど良い組み合わせを探索・最大50）</label>
+                    <select id="candidateCount"></select>
+                </div>
+
+                <div class="form-group">
+                    <label>🎓 学年ごとの配置回数上限（全日程合計）</label>
+                    <div id="gradeLimitsContainer" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa;">
+                        <p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; align-items: flex-end;">
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">学年</label>
+                            <input type="text" id="gradeLimitGrade" placeholder="例：1">
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">卓</label>
+                            <select id="gradeLimitDeskMax"></select>
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">ステージ</label>
+                            <select id="gradeLimitStageMax"></select>
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">卓+ステージ合計</label>
+                            <select id="gradeLimitTotalMax"></select>
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="addGradeLimit()">+ 追加</button>
+                    </div>
+                    <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージ・合計のいずれか1つ以上を指定してください（メンバーに「学年」を設定した場合のみ有効）</p>
+                </div>
+            </details>
+
             <!-- 警告表示（成立しなかったバンドがある場合。プレビュー自体は下に表示され続けます） -->
             <div id="shiftErrorBox" style="display: none; background: #fff8e1; border-left: 4px solid #ffa000; color: #8a5a00; padding: 15px; border-radius: 8px; margin-bottom: 20px; white-space: pre-line; font-size: 13px; line-height: 1.6;"></div>
 
@@ -763,6 +766,15 @@
 
         // メンバー編集中の場合、そのメンバーの id を保持する（null なら新規追加モード）
         let editingMemberId = null;
+
+        // 詳細設定の配置回数上限（卓/ステージ/合計）を、ユーザーがまだ手動編集していないかどうか。
+        // true のままなら、登録済みのバンド・メンバーから自動計算した目安値を都度反映し続ける
+        // （手動で一度でも変更したら false にして、以後は自動上書きしない）
+        const limitsAutoFilled = { desk: true, stage: true, total: true };
+
+        function markLimitEdited(kind) {
+            limitsAutoFilled[kind] = false;
+        }
 
         // ===== 数値入力を選択式（<select>）にするための共通ヘルパー =====
 
@@ -921,6 +933,12 @@
             setInputValue('totalLimitPerMember', data.total_limit_per_member);
             setInputValue('candidateCount', data.candidate_count);
 
+            // JSONに明示的な値が入っていた項目は「ユーザー設定」として扱い、
+            // 自動計算した目安値で上書きしないようにする
+            if (data.desk_limit_per_member !== null && data.desk_limit_per_member !== undefined) markLimitEdited('desk');
+            if (data.stage_limit_per_member !== null && data.stage_limit_per_member !== undefined) markLimitEdited('stage');
+            if (data.total_limit_per_member !== null && data.total_limit_per_member !== undefined) markLimitEdited('total');
+
             appData.gradeLimits = (data.grade_limits && typeof data.grade_limits === 'object')
                 ? JSON.parse(JSON.stringify(data.grade_limits))
                 : {};
@@ -996,12 +1014,92 @@
             if (pageNumber === 2) {
                 updatePage2Options();
             }
-            // ページ3に遷移した場合、サマリー（日数・バンド数・メンバー数）を最新化
+            // ページ3に遷移した場合、サマリー（日数・バンド数・メンバー数）を最新化し、
+            // 登録済みのバンド・メンバー構成から配置回数上限の目安を再計算する
             if (pageNumber === 3) {
                 updateSummary();
+                updateSuggestedLimits();
             }
 
             window.scrollTo(0, 0);
+        }
+
+        // 登録済みのバンド数・メンバースキル構成から、卓/ステージ×リーダー/アシスタントの
+        // 1人あたり目安配置回数を推定APIで取得し、目安の表示と各上限セレクトへの反映を行う。
+        // 詳細設定はページ3（メンバー登録後）にあるため、ここで初めて「登録人数」がわかり、
+        // 合理的なデフォルト値を計算できる。
+        async function updateSuggestedLimits() {
+            const noteEl = document.getElementById('limitsSuggestionNote');
+            if (!noteEl) return;
+
+            if (!appData.members || appData.members.length === 0 || getTotalBandCount() === 0) {
+                noteEl.textContent = '';
+                return;
+            }
+
+            const getSelectInt = (id) => {
+                const el = document.getElementById(id);
+                const value = el ? el.value.trim() : '';
+                return value === '' ? undefined : parseInt(value);
+            };
+
+            const payload = {
+                days: appData.days.map(day => ({
+                    day_number: day.dayNumber,
+                    bands: day.bands
+                })),
+                members: appData.members.map(m => ({
+                    name: m.name,
+                    skill_desk: m.skill_desk,
+                    skill_stage: m.skill_stage,
+                    count: 0
+                })),
+                desk_max_members: getSelectInt('deskMaxMembers'),
+                stage_max_members: getSelectInt('stageMaxMembers')
+            };
+
+            try {
+                const response = await fetchWithApiFallback('/api/estimate-limits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    noteEl.textContent = '';
+                    return;
+                }
+                const data = await response.json();
+
+                const parts = [];
+                if (data.desk.leader_avg !== null) {
+                    parts.push(`卓リーダー${data.desk.leader_count}人: 1人あたり約${data.desk.leader_avg}回`);
+                }
+                if (data.desk.assistant_avg !== null) {
+                    parts.push(`卓アシスタント${data.desk.assistant_count}人: 1人あたり約${data.desk.assistant_avg}回`);
+                }
+                if (data.stage.leader_avg !== null) {
+                    parts.push(`ステージリーダー${data.stage.leader_count}人: 1人あたり約${data.stage.leader_avg}回`);
+                }
+                if (data.stage.assistant_avg !== null) {
+                    parts.push(`ステージアシスタント${data.stage.assistant_count}人: 1人あたり約${data.stage.assistant_avg}回`);
+                }
+                noteEl.textContent = parts.length > 0
+                    ? `💡 目安（全${data.num_bands}バンド・登録人数ベースで自動計算）: ${parts.join(' / ')}`
+                    : '';
+
+                if (limitsAutoFilled.desk && data.suggested_desk_limit_per_member !== null) {
+                    setSelectValue('deskLimitPerMember', data.suggested_desk_limit_per_member);
+                }
+                if (limitsAutoFilled.stage && data.suggested_stage_limit_per_member !== null) {
+                    setSelectValue('stageLimitPerMember', data.suggested_stage_limit_per_member);
+                }
+                if (limitsAutoFilled.total && data.suggested_total_limit_per_member !== null) {
+                    setSelectValue('totalLimitPerMember', data.suggested_total_limit_per_member);
+                }
+            } catch (err) {
+                // 推定に失敗しても致命的ではないため、静かに無視する（詳細設定は手動入力のまま使える）
+                noteEl.textContent = '';
+            }
         }
 
         // 全日程を通じた登録バンド数（重複含む延べ数）を計算する
