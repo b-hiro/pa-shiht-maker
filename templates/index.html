@@ -448,6 +448,34 @@
             font-size: 13px;
             flex-shrink: 0;
         }
+
+        /* NG時間帯の「終日」スイッチ */
+        .ng-allday-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .ng-allday-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .ng-allday-note {
+            font-size: 12px;
+            color: #667eea;
+            background: #eef0ff;
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-bottom: 6px;
+        }
     </style>
 </head>
 <body>
@@ -1531,38 +1559,62 @@
             for (let i = 0; i < appData.numDays; i++) {
                 const dayLabel = i + 1;
                 const ranges = ngTimeDraft[i] || [];
+                const allDay = isAllDayNg(ranges);
                 html += `
                     <div class="form-group" style="margin-bottom: 15px;">
                         <label style="font-size: 12px; margin-bottom: 5px; display: block; font-weight: 600;">${dayLabel}日目のNG時間帯</label>
-                        <div id="ngRangeList${i}">
-                            ${ranges.map((range, rangeIndex) => `
-                                <div class="ng-range-row">
-                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'hour', this.value)">
-                                        ${hourOptions(splitTimeValue(range.start).hour)}
-                                    </select>
-                                    <span>：</span>
-                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'minute', this.value)">
-                                        ${minuteOptions(splitTimeValue(range.start).minute)}
-                                    </select>
-                                    <span class="ng-range-separator">〜</span>
-                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'hour', this.value)">
-                                        ${hourOptions(splitTimeValue(range.end).hour)}
-                                    </select>
-                                    <span>：</span>
-                                    <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'minute', this.value)">
-                                        ${minuteOptions(splitTimeValue(range.end).minute)}
-                                    </select>
-                                    <button type="button" class="icon-btn" title="この時間帯を削除"
-                                        onclick="removeNgRange(${i}, ${rangeIndex})">🗑️</button>
+                        <label class="ng-allday-toggle">
+                            <input type="checkbox" ${allDay ? 'checked' : ''}
+                                onchange="toggleAllDayNg(${i}, this.checked)">
+                            🚫 終日不可（この日は丸一日NG）
+                        </label>
+                        ${allDay
+                            ? '<div class="ng-allday-note">この日は終日（00:00〜23:59）NGに設定されています。個別の時間帯を指定したい場合はチェックを外してください。</div>'
+                            : `
+                                <div id="ngRangeList${i}">
+                                    ${ranges.map((range, rangeIndex) => `
+                                        <div class="ng-range-row">
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'hour', this.value)">
+                                                ${hourOptions(splitTimeValue(range.start).hour)}
+                                            </select>
+                                            <span>：</span>
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'minute', this.value)">
+                                                ${minuteOptions(splitTimeValue(range.start).minute)}
+                                            </select>
+                                            <span class="ng-range-separator">〜</span>
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'hour', this.value)">
+                                                ${hourOptions(splitTimeValue(range.end).hour)}
+                                            </select>
+                                            <span>：</span>
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'minute', this.value)">
+                                                ${minuteOptions(splitTimeValue(range.end).minute)}
+                                            </select>
+                                            <button type="button" class="icon-btn" title="この時間帯を削除"
+                                                onclick="removeNgRange(${i}, ${rangeIndex})">🗑️</button>
+                                        </div>
+                                    `).join('') || '<p style="font-size: 12px; color: #999; margin: 0 0 6px 0;">NG時間帯はありません</p>'}
                                 </div>
-                            `).join('') || '<p style="font-size: 12px; color: #999; margin: 0 0 6px 0;">NG時間帯はありません</p>'}
-                        </div>
-                        <button type="button" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;"
-                            onclick="addNgRange(${i})">+ 時間帯を追加</button>
+                                <button type="button" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;"
+                                    onclick="addNgRange(${i})">+ 時間帯を追加</button>
+                            `
+                        }
                     </div>
                 `;
             }
             container.innerHTML = html;
+        }
+
+        // 1件だけ「00:00〜23:59」の範囲がある場合を「終日NG」とみなす
+        function isAllDayNg(ranges) {
+            return Array.isArray(ranges) && ranges.length === 1 &&
+                ranges[0].start === '00:00' && ranges[0].end === '23:59';
+        }
+
+        // 終日スイッチのON/OFF切り替え。ONなら00:00〜23:59の1件に置き換え、
+        // OFFならその日のNG時間帯をクリアする（個別指定からやり直せるように）
+        function toggleAllDayNg(dayIndex, checked) {
+            ngTimeDraft[dayIndex] = checked ? [{ start: '00:00', end: '23:59' }] : [];
+            updateMemberNgTimesUI();
         }
 
         function addNgRange(dayIndex) {
@@ -1751,7 +1803,8 @@
                     : (member.ng_times || {});
                 const ngTimesDisplay = Object.entries(ngTimesByDay).map(([day, times]) => {
                     const safeTimes = Array.isArray(times) ? times : [];
-                    return `<div>${day}: ${safeTimes.join('、')}</div>`;
+                    const isAllDay = safeTimes.length === 1 && safeTimes[0] === '00:00-23:59';
+                    return `<div>${day}: ${isAllDay ? '終日' : safeTimes.join('、')}</div>`;
                 }).join('');
 
                 return `
