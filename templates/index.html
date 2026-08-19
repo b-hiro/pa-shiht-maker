@@ -673,7 +673,8 @@
                 <div class="comment" style="margin-top: 15px;">
                     <strong>💡 詳細設定について:</strong>
                     すべて省略可能です。空欄のままなら従来通りの動作になります。
-                    登録済みのバンド数・メンバー構成をもとに、下記の配置回数上限には目安の値を自動で入力しています（手動で変更した項目はそのまま保持されます）。
+                    登録済みのバンド数・メンバー構成をもとに、目安回数にはおすすめの値を自動で入力しています（手動で変更した項目はそのまま保持されます）。
+                    目安は「できればこの回数程度」という希望で、超えてもシフトは成立します。絶対に超えたくない場合は、下の最大回数を指定してください。学年ごとの上限は今まで通りハード制約です。
                 </div>
 
                 <div class="comment" style="margin-top: 0; margin-bottom: 15px;">
@@ -695,22 +696,39 @@
                     </div>
                 </div>
 
+                <p style="font-size: 13px; font-weight: 600; color: #333; margin: 10px 0 8px;">🙋 個人の目安回数（できればこの回数程度・全日程合計）</p>
                 <div class="grid-3">
                     <div class="form-group">
-                        <label>🙋 個人の卓配置回数上限（全日程合計）</label>
-                        <select id="deskLimitPerMember" onchange="markLimitEdited('desk')"></select>
+                        <label>卓</label>
+                        <select id="deskTargetPerMember" onchange="markTargetEdited('desk')"></select>
                     </div>
                     <div class="form-group">
-                        <label>🙋 個人のステージ配置回数上限（全日程合計）</label>
-                        <select id="stageLimitPerMember" onchange="markLimitEdited('stage')"></select>
+                        <label>ステージ</label>
+                        <select id="stageTargetPerMember" onchange="markTargetEdited('stage')"></select>
                     </div>
                     <div class="form-group">
-                        <label>🙋 個人の卓+ステージ合計配置回数上限（全日程合計）</label>
-                        <select id="totalLimitPerMember" onchange="markLimitEdited('total')"></select>
+                        <label>卓+ステージ合計</label>
+                        <select id="totalTargetPerMember" onchange="markTargetEdited('total')"></select>
                     </div>
                 </div>
 
-                <p id="limitsSuggestionNote" style="font-size: 12px; color: #667eea; margin-top: -10px; margin-bottom: 20px; line-height: 1.6;"></p>
+                <p id="limitsSuggestionNote" style="font-size: 12px; color: #667eea; margin-top: -4px; margin-bottom: 16px; line-height: 1.6;"></p>
+
+                <p style="font-size: 13px; font-weight: 600; color: #333; margin: 10px 0 8px;">🚫 個人の最大回数（絶対に超えない・空欄は無制限・全日程合計）</p>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>卓</label>
+                        <select id="deskLimitPerMember"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>ステージ</label>
+                        <select id="stageLimitPerMember"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>卓+ステージ合計</label>
+                        <select id="totalLimitPerMember"></select>
+                    </div>
+                </div>
 
                 <div class="form-group">
                     <label>🔀 生成パターン数（多いほど良い組み合わせを探索・最大50）</label>
@@ -808,13 +826,13 @@
         // メンバー編集中の場合、そのメンバーの id を保持する（null なら新規追加モード）
         let editingMemberId = null;
 
-        // 詳細設定の配置回数上限（卓/ステージ/合計）を、ユーザーがまだ手動編集していないかどうか。
+        // 詳細設定の目安回数（卓/ステージ/合計）を、ユーザーがまだ手動編集していないかどうか。
         // true のままなら、登録済みのバンド・メンバーから自動計算した目安値を都度反映し続ける
         // （手動で一度でも変更したら false にして、以後は自動上書きしない）
-        const limitsAutoFilled = { desk: true, stage: true, total: true };
+        const targetsAutoFilled = { desk: true, stage: true, total: true };
 
-        function markLimitEdited(kind) {
-            limitsAutoFilled[kind] = false;
+        function markTargetEdited(kind) {
+            targetsAutoFilled[kind] = false;
         }
 
         // ===== 数値入力を選択式（<select>）にするための共通ヘルパー =====
@@ -969,16 +987,19 @@
 
             setInputValue('deskMaxMembers', data.desk_max_members);
             setInputValue('stageMaxMembers', data.stage_max_members);
+            setInputValue('deskTargetPerMember', data.desk_target_per_member);
+            setInputValue('stageTargetPerMember', data.stage_target_per_member);
+            setInputValue('totalTargetPerMember', data.total_target_per_member);
             setInputValue('deskLimitPerMember', data.desk_limit_per_member);
             setInputValue('stageLimitPerMember', data.stage_limit_per_member);
             setInputValue('totalLimitPerMember', data.total_limit_per_member);
             setInputValue('candidateCount', data.candidate_count);
 
-            // JSONに明示的な値が入っていた項目は「ユーザー設定」として扱い、
+            // JSONに明示的な値が入っていた目安は「ユーザー設定」として扱い、
             // 自動計算した目安値で上書きしないようにする
-            if (data.desk_limit_per_member !== null && data.desk_limit_per_member !== undefined) markLimitEdited('desk');
-            if (data.stage_limit_per_member !== null && data.stage_limit_per_member !== undefined) markLimitEdited('stage');
-            if (data.total_limit_per_member !== null && data.total_limit_per_member !== undefined) markLimitEdited('total');
+            if (data.desk_target_per_member !== null && data.desk_target_per_member !== undefined) markTargetEdited('desk');
+            if (data.stage_target_per_member !== null && data.stage_target_per_member !== undefined) markTargetEdited('stage');
+            if (data.total_target_per_member !== null && data.total_target_per_member !== undefined) markTargetEdited('total');
 
             appData.gradeLimits = (data.grade_limits && typeof data.grade_limits === 'object')
                 ? JSON.parse(JSON.stringify(data.grade_limits))
@@ -1056,7 +1077,7 @@
                 updatePage2Options();
             }
             // ページ3に遷移した場合、サマリー（日数・バンド数・メンバー数）を最新化し、
-            // 登録済みのバンド・メンバー構成から配置回数上限の目安を再計算する
+            // 登録済みのバンド・メンバー構成から配置回数の目安を再計算する
             if (pageNumber === 3) {
                 updateSummary();
                 updateSuggestedLimits();
@@ -1066,7 +1087,8 @@
         }
 
         // 登録済みのバンド数・メンバースキル構成から、卓/ステージ×リーダー/アシスタントの
-        // 1人あたり目安配置回数を推定APIで取得し、目安の表示と各上限セレクトへの反映を行う。
+        // 1人あたり目安配置回数を推定APIで取得し、目安の表示と目安セレクトへの反映を行う。
+        // 最大回数欄は自動入力しない（空欄＝無制限のハード制約なし）。
         // 詳細設定はページ3（メンバー登録後）にあるため、ここで初めて「登録人数」がわかり、
         // 合理的なデフォルト値を計算できる。
         async function updateSuggestedLimits() {
@@ -1128,14 +1150,14 @@
                     ? `💡 目安（全${data.num_bands}バンド・登録人数ベースで自動計算）: ${parts.join(' / ')}`
                     : '';
 
-                if (limitsAutoFilled.desk && data.suggested_desk_limit_per_member !== null) {
-                    setSelectValue('deskLimitPerMember', data.suggested_desk_limit_per_member);
+                if (targetsAutoFilled.desk && data.suggested_desk_target_per_member !== null) {
+                    setSelectValue('deskTargetPerMember', data.suggested_desk_target_per_member);
                 }
-                if (limitsAutoFilled.stage && data.suggested_stage_limit_per_member !== null) {
-                    setSelectValue('stageLimitPerMember', data.suggested_stage_limit_per_member);
+                if (targetsAutoFilled.stage && data.suggested_stage_target_per_member !== null) {
+                    setSelectValue('stageTargetPerMember', data.suggested_stage_target_per_member);
                 }
-                if (limitsAutoFilled.total && data.suggested_total_limit_per_member !== null) {
-                    setSelectValue('totalLimitPerMember', data.suggested_total_limit_per_member);
+                if (targetsAutoFilled.total && data.suggested_total_target_per_member !== null) {
+                    setSelectValue('totalTargetPerMember', data.suggested_total_target_per_member);
                 }
             } catch (err) {
                 // 推定に失敗しても致命的ではないため、静かに無視する（詳細設定は手動入力のまま使える）
@@ -1838,6 +1860,13 @@
             document.getElementById('stageMaxMembers').innerHTML =
                 buildNumberOptions('', rangeValues(1, 20, 1), 'デフォルト: 2');
 
+            document.getElementById('deskTargetPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '自動（人数から算出）');
+            document.getElementById('stageTargetPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '自動（人数から算出）');
+            document.getElementById('totalTargetPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '自動（人数から算出）');
+
             document.getElementById('deskLimitPerMember').innerHTML =
                 buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
             document.getElementById('stageLimitPerMember').innerHTML =
@@ -1887,6 +1916,15 @@
 
             const stageMaxMembers = getValue('stageMaxMembers');
             if (stageMaxMembers !== '') config.stage_max_members = parseInt(stageMaxMembers);
+
+            const deskTargetPerMember = getValue('deskTargetPerMember');
+            if (deskTargetPerMember !== '') config.desk_target_per_member = parseInt(deskTargetPerMember);
+
+            const stageTargetPerMember = getValue('stageTargetPerMember');
+            if (stageTargetPerMember !== '') config.stage_target_per_member = parseInt(stageTargetPerMember);
+
+            const totalTargetPerMember = getValue('totalTargetPerMember');
+            if (totalTargetPerMember !== '') config.total_target_per_member = parseInt(totalTargetPerMember);
 
             const deskLimitPerMember = getValue('deskLimitPerMember');
             if (deskLimitPerMember !== '') config.desk_limit_per_member = parseInt(deskLimitPerMember);

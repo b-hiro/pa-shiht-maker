@@ -43,9 +43,10 @@ PACE_SOFT_OVERAGE_RATIO = 0.05
 PACE_SOFT_OVERAGE_MIN = 0.2
 # ソフト超過1につき優先度から差し引く重み（ハード除外はしない・あくまで優先度調整）
 PACE_OVERAGE_PENALTY_WEIGHT = 300
-# アシスタント（そのロールでリーダーになれないスキルの人）、または明示的な上限設定が
-# 適用されているメンバーが、基準値に対してここまで進みすぎている場合は、そのロールの
+# アシスタント（そのロールでリーダーになれないスキルの人）、または絶対上限（*_limit_per_member）
+# をペース基準に使っているメンバーが、基準値に対してここまで進みすぎている場合は、そのロールの
 # 候補からハード除外し、強制的に休ませる（＝中盤・後半に出番を持ち越させる）。
+# 目安回数（*_target_per_member）はソフト制約なので、このハード除外の対象にしない。
 # 自動推定の基準値の場合はリーダーになれるスキルの人には適用しない（リーダー不在による
 # バンド不成立を防ぐため、リーダー候補は進みすぎていても優先度を下げるだけに留める）
 PACE_HARD_OVERAGE_RATIO = 0.1
@@ -68,11 +69,10 @@ ROLE_BALANCE_WEIGHT = 8
 # 直前と異なる役割の優先度からこの値を引く（直前と同じ役割にはこのペナルティは適用されない）
 ROLE_SWITCH_PENALTY = 25
 
-# /api/estimate-limits がおすすめする「卓+ステージ合計配置回数上限」は、
+# /api/estimate-limits がおすすめする「卓+ステージ合計の目安回数」は、
 # 卓・ステージそれぞれのリーダー1人あたり目安回数の単純合計に、この倍率をかけて切り上げる。
-# 単純合計ちょうど（倍率1.0）だと、NG条件などで一部の人に負担が偏った際にすぐ上限へ
-# 抵触してしまい、「リーダー候補が不足している可能性があります」というエラーが起きやすいため、
-# 少し余裕を持たせている。
+# 単純合計ちょうど（倍率1.0）だと希望としてややきつく、NG条件などで一部の人に負担が
+# 偏った際に優先度ペナルティが強くかかりすぎるため、少し余裕を持たせている。
 TOTAL_LIMIT_SUGGESTION_MARGIN = 1.5
 
 # 複数パターンを生成し最良案を選ぶ際の試行回数（リクエストの candidate_count で上書き可）
@@ -257,7 +257,7 @@ def _validate_optional_non_negative_int(value, field_name):
 
 def parse_shift_config(data):
     """
-    リクエストボディから任意の詳細設定（人数上限・個人/学年別の配置上限など）を取り出し検証する
+    リクエストボディから任意の詳細設定（人数上限・個人の目安/絶対上限・学年別上限など）を取り出し検証する
     戻り値: (config_dict, error_message)  ※どの項目も省略可能で、省略時は従来通りの動作になる
 
     卓・ステージの成立条件はスコア閾値ではなく「スキル3以上のリーダーを最低1名含むこと」（ロールベース判定）。
@@ -268,6 +268,9 @@ def parse_shift_config(data):
     config = {
         "desk_max_members": data.get("desk_max_members"),
         "stage_max_members": data.get("stage_max_members"),
+        "desk_target_per_member": data.get("desk_target_per_member"),
+        "stage_target_per_member": data.get("stage_target_per_member"),
+        "total_target_per_member": data.get("total_target_per_member"),
         "desk_limit_per_member": data.get("desk_limit_per_member"),
         "stage_limit_per_member": data.get("stage_limit_per_member"),
         "total_limit_per_member": data.get("total_limit_per_member"),
@@ -278,6 +281,9 @@ def parse_shift_config(data):
     for field in (
         "desk_max_members",
         "stage_max_members",
+        "desk_target_per_member",
+        "stage_target_per_member",
+        "total_target_per_member",
         "desk_limit_per_member",
         "stage_limit_per_member",
         "total_limit_per_member",
@@ -285,6 +291,16 @@ def parse_shift_config(data):
         error = _validate_optional_non_negative_int(config[field], field)
         if error:
             return None, error
+
+    for target_field, limit_field in (
+        ("desk_target_per_member", "desk_limit_per_member"),
+        ("stage_target_per_member", "stage_limit_per_member"),
+        ("total_target_per_member", "total_limit_per_member"),
+    ):
+        target = config[target_field]
+        limit = config[limit_field]
+        if target is not None and limit is not None and target > limit:
+            return None, f"{target_field} は {limit_field} 以下である必要があります"
 
     if config["desk_max_members"] is None:
         config["desk_max_members"] = DEFAULT_DESK_MAX_MEMBERS
@@ -468,30 +484,41 @@ def _pace_target(m, role, skill_field, config, pace_baselines):
     """
     このロール（"desk"/"stage"）のペース判定に使う「1人あたりの目安回数」と、
     どのカウンタ（そのロール単体のカウント か 卓+ステージ合計のカウント）と比較すべきか、
-    そして『ユーザーが明示的に設定した上限かどうか』を返す。
-    戻り値: (baseline, counter_kind, is_explicit)
+    そして基準値の出どころを返す。
+    戻り値: (baseline, counter_kind, source)
+      source は "target"（ユーザーの目安） / "limit"（絶対上限をペースにも使う） / "auto"（自動推定）
 
     優先順位:
-      1. そのロール専用の明示的上限（desk_limit_per_member / stage_limit_per_member）
-      2. 合計の明示的上限（total_limit_per_member）
-      3. 登録人数・バンド数から自動推定した目安（_compute_role_pace_baselines）
+      1. そのロール専用の目安（desk_target_per_member / stage_target_per_member）
+      2. 合計の目安（total_target_per_member）
+      3. そのロール専用の絶対上限（desk_limit_per_member / stage_limit_per_member）
+         ※目安未設定時のみ。上限を前半で使い切らないためのペース配分
+      4. 合計の絶対上限（total_limit_per_member）
+      5. 登録人数・バンド数から自動推定した目安（_compute_role_pace_baselines）
     """
     if role == "desk":
+        explicit_role_target = config.get("desk_target_per_member")
         explicit_role_limit = config.get("desk_limit_per_member")
     else:
+        explicit_role_target = config.get("stage_target_per_member")
         explicit_role_limit = config.get("stage_limit_per_member")
+    explicit_total_target = config.get("total_target_per_member")
     explicit_total_limit = config.get("total_limit_per_member")
 
+    if explicit_role_target is not None:
+        return explicit_role_target, "role", "target"
+    if explicit_total_target is not None:
+        return explicit_total_target, "total", "target"
     if explicit_role_limit is not None:
-        return explicit_role_limit, "role", True
+        return explicit_role_limit, "role", "limit"
     if explicit_total_limit is not None:
-        return explicit_total_limit, "total", True
+        return explicit_total_limit, "total", "limit"
 
     tier = "leader" if m[skill_field] >= LEADER_SKILL_LEVEL else "assistant"
     baseline = pace_baselines.get(role, {}).get(f"{tier}_avg")
     if baseline is None:
-        return float("inf"), "role", False
-    return baseline, "role", False
+        return float("inf"), "role", "auto"
+    return baseline, "role", "auto"
 
 
 def _pace_thresholds(baseline):
@@ -585,15 +612,17 @@ def _assign_band(
       ようにする（役割継続ボーナスと組み合わさることで効果が強まる）
 
     配置回数のペース判定（_pace_target / _pace_overage）は「今の進行度（band_index /
-    total_bands）」に対して、そのロール専用の明示的上限（desk/stage_limit_per_member）→
-    合計の明示的上限（total_limit_per_member）→ 登録人数・バンド数から自動推定した
-    ロール・階層別の目安（_compute_role_pace_baselines）の優先順位で基準値を決め、
-    ペースを超えて前倒しで働いているメンバーには優先度ペナルティが付く。さらに、
-    「そのロールでリーダーになれないスキル（＝アシスタント）」のメンバーが大幅に超過して
-    いる場合は、そのロールの候補からハード除外して強制的に休ませる（中盤・後半に出番を
-    持ち越す）。基準値がユーザーの明示的な上限設定に基づく場合はリーダーにもハード除外を
-    適用するが、自動推定の目安に基づく場合はリーダーには適用せず優先度を下げるだけに
-    留める（リーダー不在によるバンド不成立を防ぐため）。
+    total_bands）」に対して、そのロール専用の目安（desk/stage_target_per_member）→
+    合計の目安（total_target_per_member）→ 絶対上限（目安未設定時のペース配分）→
+    登録人数・バンド数から自動推定したロール・階層別の目安（_compute_role_pace_baselines）
+    の優先順位で基準値を決め、ペースを超えて前倒しで働いているメンバーには優先度
+    ペナルティが付く。目安はソフト制約なので、超過しても候補からは除外しない。
+    自動推定の基準値で「そのロールでリーダーになれないスキル（＝アシスタント）」が
+    大幅に超過している場合は、そのロールの候補からハード除外して強制的に休ませる
+    （中盤・後半に出番を持ち越す）。絶対上限をペース基準に使う場合はリーダーにも
+    ハード除外を適用するが、目安・自動推定ではリーダーには適用せず優先度を下げる
+    だけに留める（リーダー不在によるバンド不成立を防ぐため）。
+    絶対上限（desk/stage/total_limit_per_member）と学年上限は到達したら候補から除外する。
     """
     desk_max_members = config.get("desk_max_members", DEFAULT_DESK_MAX_MEMBERS)
     stage_max_members = config.get("stage_max_members", DEFAULT_STAGE_MAX_MEMBERS)
@@ -629,11 +658,13 @@ def _assign_band(
     def pace_hard_exclude(m, role, skill_field):
         # アシスタント（そのロールでリーダーになれないスキル）がペースを大幅に超えて
         # 進みすぎている場合は、そのロールの候補から完全に除外し、強制的に休ませる。
-        # 基準値が自動推定（ユーザー未設定）の場合はリーダーには適用しない
-        # （リーダー不在によるバンド不成立を防ぐ）。ユーザーが明示的に上限を設定した
-        # 場合は、その上限を前倒しで使い切らないようリーダーにも適用する。
-        baseline, counter_kind, is_explicit = _pace_target(m, role, skill_field, config, pace_baselines)
-        if not is_explicit and m[skill_field] >= LEADER_SKILL_LEVEL:
+        # 目安（target）はソフト制約のため除外しない。自動推定の場合はリーダーには
+        # 適用しない（リーダー不在によるバンド不成立を防ぐ）。絶対上限をペース基準に
+        # 使っている場合は、その上限を前倒しで使い切らないようリーダーにも適用する。
+        baseline, counter_kind, source = _pace_target(m, role, skill_field, config, pace_baselines)
+        if source == "target":
+            return False
+        if source == "auto" and m[skill_field] >= LEADER_SKILL_LEVEL:
             return False
         _, hard_overage = _pace_thresholds(baseline)
         overage = _pace_overage(_pace_count_so_far(m, role, counter_kind), band_index, total_bands, baseline)
@@ -1293,11 +1324,12 @@ def api_estimate_limits():
     """
     シフトは生成せず、登録済みのバンド・メンバー情報から
     「卓/ステージ × リーダー/アシスタント」1人あたりの目安配置回数と、
-    詳細設定（合計回数などの上限）に使えるおすすめのデフォルト値を計算して返す軽量エンドポイント。
+    詳細設定の目安回数欄に使えるおすすめのデフォルト値を計算して返す軽量エンドポイント。
 
     合計回数のおすすめ値は、登録人数のうちスキル3以上（リーダー）の人数を基準に
     「1人あたり平均で何回必要か」を計算したもの（多くの場合リーダーが大半を占めるため、
     これを既定値にするのが実用的）。アシスタントの目安は参考値として別途返す。
+    これらはソフト制約の目安であり、絶対上限（*_limit_per_member）には使わない。
     """
     try:
         data = request.json or {}
@@ -1334,6 +1366,11 @@ def api_estimate_limits():
 
         desk = baselines["desk"]
         stage = baselines["stage"]
+        suggested_desk = _suggest_ceiling(desk["leader_avg"])
+        suggested_stage = _suggest_ceiling(stage["leader_avg"])
+        suggested_total = _suggest_ceiling(
+            ((desk["leader_avg"] or 0) + (stage["leader_avg"] or 0)) * TOTAL_LIMIT_SUGGESTION_MARGIN
+        )
 
         response = {
             "num_bands": num_bands,
@@ -1349,11 +1386,13 @@ def api_estimate_limits():
                 "leader_avg": _round1(stage["leader_avg"]),
                 "assistant_avg": _round1(stage["assistant_avg"]),
             },
-            "suggested_desk_limit_per_member": _suggest_ceiling(desk["leader_avg"]),
-            "suggested_stage_limit_per_member": _suggest_ceiling(stage["leader_avg"]),
-            "suggested_total_limit_per_member": _suggest_ceiling(
-                ((desk["leader_avg"] or 0) + (stage["leader_avg"] or 0)) * TOTAL_LIMIT_SUGGESTION_MARGIN
-            ),
+            "suggested_desk_target_per_member": suggested_desk,
+            "suggested_stage_target_per_member": suggested_stage,
+            "suggested_total_target_per_member": suggested_total,
+            # 旧キー（互換用）。フロントは suggested_*_target_* を使う
+            "suggested_desk_limit_per_member": suggested_desk,
+            "suggested_stage_limit_per_member": suggested_stage,
+            "suggested_total_limit_per_member": suggested_total,
         }
         return jsonify(response)
     except Exception as e:

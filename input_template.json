@@ -79,8 +79,12 @@
   ],
   "desk_max_members": null,
   "stage_max_members": null,
+  "desk_target_per_member": null,
+  "stage_target_per_member": null,
+  "total_target_per_member": null,
   "desk_limit_per_member": null,
   "stage_limit_per_member": null,
+  "total_limit_per_member": null,
   "grade_limits": {},
   "candidate_count": 12
 }
