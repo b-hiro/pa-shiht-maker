@@ -30,6 +30,7 @@
   "members": [
     {
       "name": "みらい",
+      "grade": "2",
       "skill_desk": 5,
       "skill_stage": 4,
       "count": 0,
@@ -50,6 +51,7 @@
     },
     {
       "name": "るい",
+      "grade": "1",
       "skill_desk": 3,
       "skill_stage": 3,
       "count": 0,
@@ -64,6 +66,7 @@
     },
     {
       "name": "先輩A",
+      "grade": "3",
       "skill_desk": 5,
       "skill_stage": 5,
       "count": 0,
@@ -76,6 +79,7 @@
     },
     {
       "name": "後輩B",
+      "grade": "1",
       "skill_desk": 2,
       "skill_stage": 2,
       "count": 0,
@@ -92,5 +96,13 @@
         "day1_band3"
       ]
     }
-  ]
+  ],
+  "desk_max_members": null,
+  "stage_max_members": null,
+  "desk_limit_per_member": null,
+  "stage_limit_per_member": null,
+  "grade_limits": {
+    "1": { "desk_max": 3, "stage_max": 3 }
+  },
+  "candidate_count": 12
 }

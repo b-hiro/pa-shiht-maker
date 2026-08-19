@@ -1,0 +1,398 @@
+{
+  "num_days": 5,
+  "days": [
+    {
+      "day_number": 1,
+      "start_time": "12:15",
+      "bands": [
+        "KEYTALK(遠藤)",
+        "My Hair is Bad",
+        "米津玄師",
+        "BUMP OF CHICKEN",
+        "sumika",
+        "神聖かまってちゃん",
+        "LINKIN PARK"
+      ],
+      "rh_mins": 15,
+      "act_mins": 10,
+      "break_duration": 0,
+      "break_after_band": ""
+    },
+    {
+      "day_number": 2,
+      "start_time": "10:30",
+      "bands": [
+        "B'z",
+        "Buono!",
+        "Eve",
+        "SUPER BEAVER(中溝)",
+        "go!go!vanillas",
+        "コレサワ",
+        "Vaundy",
+        "ポルカ(高橋)",
+        "セカオワ",
+        "ヨルシカ(財田)",
+        "椎名林檎(添田)",
+        "[Alexandros]",
+        "夏代孝明",
+        "35.7",
+        "カネヨリマサル",
+        "ゲスの極み乙女",
+        "OKAMOTO'S"
+      ],
+      "rh_mins": 15,
+      "act_mins": 10,
+      "break_duration": 85,
+      "break_after_band": "コレサワ"
+    },
+    {
+      "day_number": 3,
+      "start_time": "10:30",
+      "bands": [
+        "Blue Mash",
+        "ずっと真夜中でいいのに",
+        "Conton Candy(河合)",
+        "aiko",
+        "椎名林檎(番場)",
+        "超社会的☆サンダル",
+        "レトロリロン",
+        "TOMOO",
+        "さと City Pop Band",
+        "ORANGE RANGE",
+        "SUPER BEAVER(高村)",
+        "KEYTALK(赤井)",
+        "クリープハイプ",
+        "doa",
+        "Suspended 4th",
+        "GEMN",
+        "ポルカ(しまむら)"
+      ],
+      "rh_mins": 15,
+      "act_mins": 10,
+      "break_duration": 60,
+      "break_after_band": "超社会的☆サンダル"
+    },
+    {
+      "day_number": 4,
+      "start_time": "13:30",
+      "bands": [
+        "スピッツ",
+        "RADWIMPS",
+        "羊文学",
+        "Conton Candy(くるたん)",
+        "東京事変(バンバン)",
+        "Aooo",
+        "NIRVANA",
+        "ASIAN KUNG-FU(浅川)",
+        "base ball bear",
+        "cinema staff",
+        "東京事変(土屋)",
+        "ASIAN KUNG-FU(山賀)"
+      ],
+      "rh_mins": 15,
+      "act_mins": 10,
+      "break_duration": 60,
+      "break_after_band": "Aooo"
+    },
+    {
+      "day_number": 5,
+      "start_time": "12:00",
+      "bands": [
+        "Hump Back",
+        "ねぐせ。",
+        "ヨルシカ(八木)",
+        "システム",
+        "sunny girl",
+        "Poppin'Party",
+        "八十八ヶ所巡礼",
+        "宇宙コンビニ",
+        "Chevon"
+      ],
+      "rh_mins": 15,
+      "act_mins": 10,
+      "break_duration": 0,
+      "break_after_band": ""
+    }
+  ],
+  "members": [
+    {
+      "name": "ペプシマン erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "ORANGE RANGE",
+        "Suspended 4th",
+        "東京事変(バンバン)",
+        "東京事変(土屋)",
+        "base ball bear"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "ミネホ erimasonic",
+      "grade": "2",
+      "skill_desk": 1,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "なみ erimasonic",
+      "grade": "2",
+      "skill_desk": 1,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "ヨルシカ(財田)"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [
+          "00:00-23:59"
+        ],
+        "day_5": [
+          "00:00-23:59"
+        ]
+      },
+      "req_bands": []
+    },
+    {
+      "name": "山口怜音 erimasonic",
+      "grade": "2",
+      "skill_desk": 2,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "35.7",
+        "Conton Candy(くるたん)",
+        "Poppin'Party"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "ばんば erimasonic",
+      "grade": "3",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "B'z",
+        "夏代孝明",
+        "椎名林檎(番場)",
+        "東京事変(バンバン)"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [
+          "10:30-13:00"
+        ],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "小針夏海 erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "Conton Candy(くるたん)",
+        "Aooo",
+        "ASIAN KUNG-FU(山賀)",
+        "Chevon"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [
+          "10:30-15:30"
+        ],
+        "day_3": [
+          "10:30-15:30"
+        ],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "佐伯史帆 erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "go!go!vanillas",
+        "椎名林檎(番場)"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [
+          "00:00-23:59"
+        ],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "露木陽斗 erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "go!go!vanillas",
+        "ASIAN KUNG-FU(山賀)",
+        "システム"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [
+          "00:00-23:59"
+        ],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "とうや erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "ポルカ(高橋)",
+        "cinema staff"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [
+          "10:30-14:50"
+        ],
+        "day_3": [
+          "10:30-14:00",
+          "17:30-23:59"
+        ],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "希 erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "LINKIN PARK",
+        "セカオワ",
+        "超社会的☆サンダル"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [
+          "00:00-23:59"
+        ],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "犬飼優花 erimasonic",
+      "grade": "1",
+      "skill_desk": 1,
+      "skill_stage": 1,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "くうき erimasonic",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "SUPER BEAVER(中溝)",
+        "go!go!vanillas"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "平井晴樹 erimasonic",
+      "grade": "2",
+      "skill_desk": 1,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [
+        "Buono!"
+      ],
+      "ng_times": {
+        "day_1": [],
+        "day_2": [],
+        "day_3": [
+          "00:00-23:59"
+        ],
+        "day_4": [],
+        "day_5": []
+      },
+      "req_bands": []
+    }
+  ],
+  "desk_max_members": null,
+  "stage_max_members": null,
+  "desk_limit_per_member": null,
+  "stage_limit_per_member": null,
+  "total_limit_per_member": null,
+  "grade_limits": {},
+  "candidate_count": 12
+}

@@ -1,0 +1,259 @@
+{
+  "num_days": 1,
+  "days": [
+    {
+      "day_number": 1,
+      "start_time": "10:00",
+      "bands": [
+        "ONE OK ROCK(コピー)",
+        "RADWIMPS(コピー)",
+        "King Gnu(コピー)",
+        "YOASOBI(コピー)",
+        "Official髭男dism(コピー)",
+        "あいみょん(コピー)",
+        "米津玄師(コピー)",
+        "サカナクション(コピー)",
+        "Mrs. GREEN APPLE(コピー)",
+        "back number(コピー)",
+        "スピッツ(コピー)",
+        "Mr.Children(コピー)",
+        "BUMP OF CHICKEN(コピー)",
+        "ASIAN KUNG-FU GENERATION(コピー)",
+        "ELLEGARDEN(コピー)",
+        "L'Arc~en~Ciel(コピー)",
+        "シド(コピー)",
+        "フジファブリック(コピー)",
+        "羊文学(コピー)",
+        "Vaundy(コピー)"
+      ],
+      "rh_mins": 15,
+      "act_mins": 10,
+      "break_duration": 45,
+      "break_after_band": "back number(コピー)"
+    }
+  ],
+  "members": [
+    {
+      "name": "みらい",
+      "grade": "2",
+      "skill_desk": 5,
+      "skill_stage": 4,
+      "count": 0,
+      "ng_bands": ["ONE OK ROCK(コピー)", "RADWIMPS(コピー)"],
+      "ng_times": {
+        "day_1": ["10:00-10:25", "14:10-14:55"]
+      },
+      "req_bands": ["YOASOBI(コピー)", "King Gnu(コピー)"]
+    },
+    {
+      "name": "るい",
+      "grade": "1",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["12:30-12:55", "16:35-17:00"]
+      },
+      "req_bands": ["スピッツ(コピー)"]
+    },
+    {
+      "name": "先輩A",
+      "grade": "3",
+      "skill_desk": 5,
+      "skill_stage": 5,
+      "count": 0,
+      "ng_bands": ["Vaundy(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "先輩B",
+      "grade": "3",
+      "skill_desk": 4,
+      "skill_stage": 5,
+      "count": 0,
+      "ng_bands": ["BUMP OF CHICKEN(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": ["Official髭男dism(コピー)", "Mrs. GREEN APPLE(コピー)"]
+    },
+    {
+      "name": "先輩C",
+      "grade": "3",
+      "skill_desk": 4,
+      "skill_stage": 4,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["10:50-11:15"]
+      },
+      "req_bands": ["サカナクション(コピー)"]
+    },
+    {
+      "name": "後輩B",
+      "grade": "1",
+      "skill_desk": 2,
+      "skill_stage": 2,
+      "count": 0,
+      "ng_bands": ["ELLEGARDEN(コピー)"],
+      "ng_times": {
+        "day_1": ["15:45-16:10"]
+      },
+      "req_bands": ["ONE OK ROCK(コピー)"]
+    },
+    {
+      "name": "後輩C",
+      "grade": "1",
+      "skill_desk": 1,
+      "skill_stage": 2,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["11:15-11:40"]
+      },
+      "req_bands": []
+    },
+    {
+      "name": "後輩D",
+      "grade": "1",
+      "skill_desk": 2,
+      "skill_stage": 1,
+      "count": 0,
+      "ng_bands": ["King Gnu(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": ["Mr.Children(コピー)"]
+    },
+    {
+      "name": "後輩E",
+      "grade": "1",
+      "skill_desk": 3,
+      "skill_stage": 2,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["17:50-18:15"]
+      },
+      "req_bands": []
+    },
+    {
+      "name": "サポート1",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["YOASOBI(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": ["あいみょん(コピー)"]
+    },
+    {
+      "name": "サポート2",
+      "grade": "2",
+      "skill_desk": 2,
+      "skill_stage": 4,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["14:55-15:20"]
+      },
+      "req_bands": ["RADWIMPS(コピー)"]
+    },
+    {
+      "name": "サポート3",
+      "grade": "2",
+      "skill_desk": 1,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["スピッツ(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "サポート4",
+      "grade": "2",
+      "skill_desk": 4,
+      "skill_stage": 2,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["18:15-18:40"]
+      },
+      "req_bands": ["Vaundy(コピー)"]
+    },
+    {
+      "name": "サポート5",
+      "grade": "1",
+      "skill_desk": 2,
+      "skill_stage": 1,
+      "count": 0,
+      "ng_bands": ["Mr.Children(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "サポート6",
+      "grade": "1",
+      "skill_desk": 5,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["13:20-13:45"]
+      },
+      "req_bands": ["ASIAN KUNG-FU GENERATION(コピー)"]
+    },
+    {
+      "name": "サポート7",
+      "grade": "2",
+      "skill_desk": 3,
+      "skill_stage": 2,
+      "count": 0,
+      "ng_bands": ["L'Arc~en~Ciel(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": ["シド(コピー)"]
+    },
+    {
+      "name": "サポート8",
+      "grade": "1",
+      "skill_desk": 2,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["16:10-16:35"]
+      },
+      "req_bands": ["フジファブリック(コピー)"]
+    },
+    {
+      "name": "サポート9",
+      "grade": "2",
+      "skill_desk": 4,
+      "skill_stage": 1,
+      "count": 0,
+      "ng_bands": ["羊文学(コピー)"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": ["米津玄師(コピー)"]
+    }
+  ],
+  "desk_max_members": null,
+  "stage_max_members": null,
+  "desk_limit_per_member": null,
+  "stage_limit_per_member": null,
+  "grade_limits": {},
+  "candidate_count": 12
+}

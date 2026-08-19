@@ -1,0 +1,2435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PA-Shift タイムテーブル・シフト生成ツール（複数日対応版）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            position: relative;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #bgEmojiCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 1000px;
+            overflow: hidden;
+        }
+
+        .page {
+            display: none;
+            padding: 40px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+        }
+
+        .page-header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .page-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="time"],
+        input[type="date"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        input[type="time"]:focus,
+        input[type="date"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .grid-2, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 40px;
+            position: relative;
+            padding: 30px 40px 0;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .step::after {
+            content: '';
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            width: 100%;
+            height: 2px;
+            background: #ddd;
+            z-index: -1;
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            background: #ddd;
+            color: #999;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: 600;
+            font-size: 18px;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .step.completed .step-number {
+            background: #4caf50;
+            color: white;
+        }
+
+        .step-title {
+            font-size: 13px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .step.active .step-title {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .member-card {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .member-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .comment {
+            background: #e3f2fd;
+            padding: 12px;
+            border-left: 4px solid #2196f3;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 13px;
+            color: #1565c0;
+            line-height: 1.6;
+        }
+
+        .comment strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #0d47a1;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .preview-table {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .preview-table table {
+            font-size: 12px;
+        }
+
+        .preview-table th {
+            background: #667eea;
+            color: white;
+        }
+
+        /* チェックボックスのスタイル */
+        input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+
+        input[type="checkbox"]:hover {
+            accent-color: #667eea;
+        }
+
+        .member-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .card-header-row h3 {
+            margin-bottom: 0;
+        }
+
+        .icon-btn-group {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .icon-btn {
+            background: #f0f0f0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 15px;
+            padding: 0;
+            transition: background 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: #e0e0e0;
+        }
+
+        /* バンド行（ドラッグして並び替え可能） */
+        .band-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f9f9f9;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .band-row.drag-over {
+            outline: 2px dashed #667eea;
+            outline-offset: -2px;
+        }
+
+        .band-drag-handle {
+            color: #999;
+            font-size: 18px;
+            cursor: grab;
+            user-select: none;
+            line-height: 1;
+        }
+
+        .band-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .band-name {
+            flex: 1;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* NG時間帯（ダイヤル式）の1行分 */
+        .ng-range-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .ng-range-row select {
+            flex: 1;
+            min-width: 60px;
+        }
+
+        .ng-range-separator {
+            color: #666;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        /* NG時間帯の「終日」スイッチ */
+        .ng-allday-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .ng-allday-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .ng-allday-note {
+            font-size: 12px;
+            color: #667eea;
+            background: #eef0ff;
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bgEmojiCanvas" aria-hidden="true"></canvas>
+    <div class="container">
+        <!-- ステップインジケーター -->
+        <div class="step-indicator">
+            <div class="step active" onclick="goToPage(1)">
+                <div class="step-number">1</div>
+                <div class="step-title">イベント・タイムテーブル設定</div>
+            </div>
+            <div class="step" onclick="goToPage(2)">
+                <div class="step-number">2</div>
+                <div class="step-title">メンバー条件設定</div>
+            </div>
+            <div class="step" onclick="goToPage(3)">
+                <div class="step-number">3</div>
+                <div class="step-title">プレビュー・出力</div>
+            </div>
+        </div>
+
+        <!-- ページ1: イベント・タイムテーブル設定 -->
+        <div id="page1" class="page active">
+            <div class="page-header">
+                <h1>🎸 ページ1: イベント・タイムテーブル設定</h1>
+                <p>複数日のイベント設定とバンドのタイムテーブルを設定します</p>
+            </div>
+
+            <div class="comment">
+                <strong>💡 このページについて:</strong>
+                イベント日数、各日の開始時間、出演バンド、リハ・本番時間、昼休憩を設定します。
+            </div>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label>📂 入力済み JSON を読み込む</label>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary" onclick="openJsonImportPicker()">
+                        JSONファイルを選択
+                    </button>
+                    <input type="file" id="jsonImportInput" accept=".json,application/json" style="display: none;" onchange="importInputJson(event)">
+                    <span id="jsonImportStatus" style="font-size: 13px; color: #666;">未選択</span>
+                </div>
+            </div>
+
+            <form id="timetableForm">
+                <!-- イベント日数設定 -->
+                <div class="form-group">
+                    <label>📅 イベント日数</label>
+                    <select id="numDays" required onchange="updateDayTabs()"></select>
+                </div>
+
+                <p id="totalBandsCount" style="margin-top: 15px; color: #333; font-weight: 600;">🎸 登録バンド数: 0 バンド（全日程合計）</p>
+
+                <!-- 日別設定タブ -->
+                <div id="daysContainer" style="margin-top: 30px;">
+                    <div class="tabs" id="dayTabs"></div>
+                    <div id="dayContents"></div>
+                </div>
+
+                <!-- ナビゲーションボタン -->
+                <div class="button-group">
+                    <button type="button" class="btn-primary" onclick="goToPage(2)">
+                        次へ →
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ページ2: メンバー条件設定 -->
+        <div id="page2" class="page">
+            <div class="page-header">
+                <h1>👥 ページ2: メンバー条件設定</h1>
+                <p>各メンバーのスキルと勤務条件を設定します</p>
+            </div>
+
+            <div class="comment">
+                <strong>💡 このページについて:</strong>
+                各メンバーの名前、卓・ステージスキル、NG条件などを設定します。複数メンバーを追加できます。
+            </div>
+
+            <form id="memberForm">
+                <!-- メンバー追加セクション -->
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>👤 メンバー名</label>
+                        <input type="text" id="memberName" placeholder="例：みらい">
+                    </div>
+                    <div class="form-group">
+                        <label>🎓 学年（任意）</label>
+                        <input type="text" id="memberGrade" placeholder="例：1">
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>🎚️ 卓スキル（1-5）</label>
+                        <select id="skillDesk" required>
+                            <option value="1">1（初心者）</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3（標準）</option>
+                            <option value="4">4</option>
+                            <option value="5">5（熟練）</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>🎤 ステージスキル（1-5）</label>
+                        <select id="skillStage" required>
+                            <option value="1">1（初心者）</option>
+                            <option value="2">2</option>
+                            <option value="3" selected>3（標準）</option>
+                            <option value="4">4</option>
+                            <option value="5">5（熟練）</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 出演バンド（選択肢から選ぶ） -->
+                <div class="form-group">
+                    <label>🚫 出演バンド</label>
+                    <div id="ngBandsCheckboxes" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa; max-height: 150px; overflow-y: auto;">
+                        <p style="color: #999; font-size: 13px;">1ページ目で追加したバンドが表示されます</p>
+                    </div>
+                </div>
+
+                <!-- NG時間帯（選択肢から選ぶ） -->
+                <div id="memberNgTimesContainer"></div>
+
+                <!-- 希望バンド（選択肢から選ぶ） -->
+                <div class="form-group">
+                    <label>⭐ 希望バンド</label>
+                    <div id="reqBandsCheckboxes" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa; max-height: 150px; overflow-y: auto;">
+                        <p style="color: #999; font-size: 13px;">1ページ目で追加したバンドが表示されます</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-secondary" id="memberSubmitBtn" onclick="addMember()">
+                        + メンバーを追加
+                    </button>
+                    <button type="button" class="btn-secondary" id="memberCancelEditBtn" style="display: none;" onclick="cancelEditMember()">
+                        ✕ 編集をキャンセル
+                    </button>
+                </div>
+            </form>
+
+            <!-- 追加されたメンバー一覧 -->
+            <div id="membersList" style="margin-top: 30px;"></div>
+
+            <!-- ナビゲーションボタン -->
+            <div class="button-group">
+                <button type="button" class="btn-secondary" onclick="goToPage(1)">
+                    ← 前へ
+                </button>
+                <button type="button" class="btn-primary" onclick="goToPage(3)">
+                    次へ →
+                </button>
+            </div>
+        </div>
+
+        <!-- ページ3: プレビュー・出力 -->
+        <div id="page3" class="page">
+            <div class="page-header">
+                <h1>📊 ページ3: シフト結果・出力</h1>
+                <p>生成される PA シフトを確認して出力します</p>
+            </div>
+
+            <div class="comment">
+                <strong>💡 このページについて:</strong>
+                設定した内容から自動生成された PA シフトがここに表示されます。
+            </div>
+
+            <!-- サマリー情報 -->
+            <div style="background: #f0f5ff; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="color: #333; margin-bottom: 15px;">📋 設定内容のサマリー</h3>
+                <div class="grid-3">
+                    <div>
+                        <p style="color: #666; font-size: 13px;">イベント日数</p>
+                        <p id="summaryDays" style="color: #333; font-weight: 600;">0 日</p>
+                    </div>
+                    <div>
+                        <p style="color: #666; font-size: 13px;">登録バンド数</p>
+                        <p id="summaryBands" style="color: #333; font-weight: 600;">0 バンド</p>
+                    </div>
+                    <div>
+                        <p style="color: #666; font-size: 13px;">登録メンバー数</p>
+                        <p id="summaryMembers" style="color: #333; font-weight: 600;">0 人</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 詳細設定（任意） -->
+            <details style="margin-bottom: 25px; border: 1px solid #ddd; border-radius: 8px; padding: 15px;">
+                <summary style="cursor: pointer; font-weight: 600; color: #333;">⚙️ 詳細設定（任意・省略可）</summary>
+
+                <div class="comment" style="margin-top: 15px;">
+                    <strong>💡 詳細設定について:</strong>
+                    すべて省略可能です。空欄のままなら従来通りの動作になります。
+                    登録済みのバンド数・メンバー構成をもとに、目安回数にはおすすめの値を自動で入力しています（手動で変更した項目はそのまま保持されます）。
+                    目安は「できればこの回数程度」という希望で、超えてもシフトは成立します。絶対に超えたくない場合は、下の最大回数を指定してください。学年ごとの上限は今まで通りハード制約です。
+                </div>
+
+                <div class="comment" style="margin-top: 0; margin-bottom: 15px;">
+                    <strong>💡 成立条件について:</strong>
+                    卓・ステージとも「スキル3以上のリーダーを最低1名含むこと」が必須です。
+                    リーダーを確保できないバンドは成立不可（エラー）として扱われます。
+                    卓は「リーダー1名＋アシスタント1名」が基本形で、アシスタント候補がいない場合はリーダー1名のみでも成立とみなします（リーダーを2名重複配置しません）。
+                    ステージはリーダー確保後、人数上限までスキルを問わず優先度順に補充します。
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>👥 卓の人数上限（リーダー含む・1バンドあたり）</label>
+                        <select id="deskMaxMembers" onchange="updateSuggestedLimits()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>👥 ステージの人数上限（リーダー含む・1バンドあたり）</label>
+                        <select id="stageMaxMembers" onchange="updateSuggestedLimits()"></select>
+                    </div>
+                </div>
+
+                <p style="font-size: 13px; font-weight: 600; color: #333; margin: 10px 0 8px;">🙋 個人の目安回数（できればこの回数程度・全日程合計）</p>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>卓</label>
+                        <select id="deskTargetPerMember" onchange="markTargetEdited('desk')"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>ステージ</label>
+                        <select id="stageTargetPerMember" onchange="markTargetEdited('stage')"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>卓+ステージ合計</label>
+                        <select id="totalTargetPerMember" onchange="markTargetEdited('total')"></select>
+                    </div>
+                </div>
+
+                <p id="limitsSuggestionNote" style="font-size: 12px; color: #667eea; margin-top: -4px; margin-bottom: 16px; line-height: 1.6;"></p>
+
+                <p style="font-size: 13px; font-weight: 600; color: #333; margin: 10px 0 8px;">🚫 個人の最大回数（絶対に超えない・空欄は無制限・全日程合計）</p>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>卓</label>
+                        <select id="deskLimitPerMember"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>ステージ</label>
+                        <select id="stageLimitPerMember"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>卓+ステージ合計</label>
+                        <select id="totalLimitPerMember"></select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>🔀 生成パターン数（多いほど良い組み合わせを探索・最大50）</label>
+                    <select id="candidateCount"></select>
+                </div>
+
+                <div class="form-group">
+                    <label>🎓 学年ごとの配置回数上限（全日程合計）</label>
+                    <div id="gradeLimitsContainer" style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa;">
+                        <p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; align-items: flex-end;">
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">学年</label>
+                            <input type="text" id="gradeLimitGrade" placeholder="例：1">
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">卓</label>
+                            <select id="gradeLimitDeskMax"></select>
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">ステージ</label>
+                            <select id="gradeLimitStageMax"></select>
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label style="font-size: 11px; color: #666;">卓+ステージ合計</label>
+                            <select id="gradeLimitTotalMax"></select>
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="addGradeLimit()">+ 追加</button>
+                    </div>
+                    <p style="font-size: 11px; color: #999; margin-top: 5px;">卓・ステージ・合計のいずれか1つ以上を指定してください（メンバーに「学年」を設定した場合のみ有効）</p>
+                </div>
+            </details>
+
+            <!-- 警告表示（成立しなかったバンドがある場合。プレビュー自体は下に表示され続けます） -->
+            <div id="shiftErrorBox" style="display: none; background: #fff8e1; border-left: 4px solid #ffa000; color: #8a5a00; padding: 15px; border-radius: 8px; margin-bottom: 20px; white-space: pre-line; font-size: 13px; line-height: 1.6;"></div>
+
+            <!-- シフト結果タブ -->
+            <div id="shiftTabsContainer"></div>
+
+            <!-- メンバーシフト回数集計 -->
+            <div class="comment" style="margin-top: 30px;">
+                <strong>📊 シフト割り当て回数集計:</strong>
+                各メンバーがシフトに割り当てられた回数を表示します（リハ+本番 = 1回）
+            </div>
+
+            <div class="preview-table">
+                <table id="memberCountTable">
+                    <thead>
+                        <tr>
+                            <th>メンバー名</th>
+                            <th>学年</th>
+                            <th>シフト回数</th>
+                            <th>卓回数</th>
+                            <th>ステージ回数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberCountBody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: #999; padding: 30px;">
+                                シフト回数のデータが表示されます
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ナビゲーション・出力ボタン -->
+            <div class="button-group">
+                <button type="button" class="btn-secondary" onclick="goToPage(2)">
+                    ← 前へ
+                </button>
+                <button type="button" class="btn-primary" onclick="generateShiftAndPreview()">
+                    🔄 シフトを生成
+                </button>
+                <button type="button" class="btn-primary" onclick="downloadExcel()">
+                    📥 エクセルで出力
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバルデータ管理
+        const appData = {
+            numDays: 1,
+            days: [],
+            members: [],
+            gradeLimits: {}, // { "1": { desk_max: 8, stage_max: 6, total_max: 10 }, ... }
+            generatedTimetableMulti: null,
+            generatedShift: null,
+            infeasibleByDay: {} // { "day_1": [ {band, desk_has_leader, stage_has_leader, reason, ...}, ... ], ... }
+        };
+
+        // メンバー編集中の場合、そのメンバーの id を保持する（null なら新規追加モード）
+        let editingMemberId = null;
+
+        // 詳細設定の目安回数（卓/ステージ/合計）を、ユーザーがまだ手動編集していないかどうか。
+        // true のままなら、登録済みのバンド・メンバーから自動計算した目安値を都度反映し続ける
+        // （手動で一度でも変更したら false にして、以後は自動上書きしない）
+        const targetsAutoFilled = { desk: true, stage: true, total: true };
+
+        function markTargetEdited(kind) {
+            targetsAutoFilled[kind] = false;
+        }
+
+        // ===== 数値入力を選択式（<select>）にするための共通ヘルパー =====
+
+        // start〜end を step 刻みで並べた数値配列を作る
+        function rangeValues(start, end, step) {
+            const values = [];
+            for (let v = start; v <= end; v += step) values.push(v);
+            return values;
+        }
+
+        // 指定した候補値（＋現在値。候補になければ追加）から <option> のHTMLを組み立てる
+        function buildNumberOptions(current, values, emptyLabel) {
+            let html = '';
+            if (emptyLabel !== undefined) {
+                const isEmpty = current === null || current === undefined || current === '';
+                html += `<option value=""${isEmpty ? ' selected' : ''}>${emptyLabel}</option>`;
+            }
+
+            const numericCurrent = (current === null || current === undefined || current === '')
+                ? null : Number(current);
+            const optionValues = new Set(values);
+            if (numericCurrent !== null && !Number.isNaN(numericCurrent)) {
+                optionValues.add(numericCurrent);
+            }
+
+            html += Array.from(optionValues).sort((a, b) => a - b).map(v =>
+                `<option value="${v}"${numericCurrent === v ? ' selected' : ''}>${v}</option>`
+            ).join('');
+            return html;
+        }
+
+        // <select> に値をセットする（候補にない値は一時的に選択肢へ追加してから反映する）
+        function setSelectValue(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const strValue = (value === undefined || value === null || value === '') ? '' : String(value);
+            if (strValue !== '' && !Array.from(el.options).some(opt => opt.value === strValue)) {
+                const opt = document.createElement('option');
+                opt.value = strValue;
+                opt.textContent = strValue;
+                el.appendChild(opt);
+            }
+            el.value = strValue;
+        }
+
+        // ===== 時刻（時・分）を選択式にするための共通ヘルパー =====
+        const NG_TIME_MINUTE_OPTIONS = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+        function hourOptions(current) {
+            let html = '';
+            for (let h = 0; h < 24; h++) {
+                const hh = String(h).padStart(2, '0');
+                html += `<option value="${hh}"${hh === current ? ' selected' : ''}>${hh}</option>`;
+            }
+            return html;
+        }
+
+        function minuteOptions(current) {
+            return NG_TIME_MINUTE_OPTIONS.map(m =>
+                `<option value="${m}"${m === current ? ' selected' : ''}>${m}</option>`
+            ).join('');
+        }
+
+        // "HH:MM" 文字列を { hour, minute } に分解する（分は5分刻みに丸める）
+        function splitTimeValue(value) {
+            if (typeof value === 'string' && /^\d{1,2}:\d{1,2}$/.test(value)) {
+                let [h, m] = value.split(':').map(v => parseInt(v, 10));
+                let roundedMin = Math.round(m / 5) * 5;
+                if (roundedMin >= 60) {
+                    roundedMin = 0;
+                    h = (h + 1) % 24;
+                }
+                return { hour: String(h).padStart(2, '0'), minute: String(roundedMin).padStart(2, '0') };
+            }
+            return { hour: '00', minute: '00' };
+        }
+
+        function combineTimeValue(hour, minute) {
+            return `${hour}:${minute}`;
+        }
+
+        const API_BASE_CANDIDATES = [
+            'http://127.0.0.1:5000',
+            'http://localhost:5000'
+        ];
+
+        async function fetchWithApiFallback(path, options) {
+            let lastError = null;
+            for (const baseUrl of API_BASE_CANDIDATES) {
+                try {
+                    return await fetch(`${baseUrl}${path}`, options);
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+            throw lastError || new Error('API endpoint is unreachable');
+        }
+
+        function openJsonImportPicker() {
+            document.getElementById('jsonImportInput').click();
+        }
+
+        function normalizeDaysFromJson(data) {
+            if (Array.isArray(data.days) && data.days.length > 0) {
+                return data.days.map((day, index) => ({
+                    dayNumber: day.day_number || index + 1,
+                    startTime: day.start_time || '11:30',
+                    bands: Array.isArray(day.bands) ? day.bands : [],
+                    rehearsalMinutes: parseInt(day.rh_mins) || 15,
+                    performanceMinutes: parseInt(day.act_mins) || 10,
+                    breakDuration: parseInt(day.break_duration) || 60,
+                    breakAfterBand: day.break_after_band || ''
+                }));
+            }
+
+            if (Array.isArray(data.bands)) {
+                return [{
+                    dayNumber: 1,
+                    startTime: data.start_time || '11:30',
+                    bands: data.bands,
+                    rehearsalMinutes: parseInt(data.rh_mins) || 15,
+                    performanceMinutes: parseInt(data.act_mins) || 10,
+                    breakDuration: parseInt(data.break_duration) || 60,
+                    breakAfterBand: data.break_after_band || ''
+                }];
+            }
+
+            return [];
+        }
+
+        function normalizeMembersFromJson(data) {
+            if (!Array.isArray(data.members)) return [];
+            return data.members.map(member => ({
+                id: Date.now() + Math.floor(Math.random() * 100000),
+                name: member.name || '',
+                grade: (member.grade !== undefined && member.grade !== null && member.grade !== '')
+                    ? String(member.grade) : null,
+                skill_desk: parseInt(member.skill_desk) || 3,
+                skill_stage: parseInt(member.skill_stage) || 3,
+                count: parseInt(member.count) || 0,
+                ng_bands: Array.isArray(member.ng_bands) ? member.ng_bands : [],
+                ng_times: Array.isArray(member.ng_times)
+                    ? { day_1: member.ng_times }
+                    : ((member.ng_times && typeof member.ng_times === 'object') ? member.ng_times : {}),
+                req_bands: Array.isArray(member.req_bands) ? member.req_bands : []
+            }));
+        }
+
+        function normalizeConfigFromJson(data) {
+            const setInputValue = setSelectValue;
+
+            setInputValue('deskMaxMembers', data.desk_max_members);
+            setInputValue('stageMaxMembers', data.stage_max_members);
+            setInputValue('deskTargetPerMember', data.desk_target_per_member);
+            setInputValue('stageTargetPerMember', data.stage_target_per_member);
+            setInputValue('totalTargetPerMember', data.total_target_per_member);
+            setInputValue('deskLimitPerMember', data.desk_limit_per_member);
+            setInputValue('stageLimitPerMember', data.stage_limit_per_member);
+            setInputValue('totalLimitPerMember', data.total_limit_per_member);
+            setInputValue('candidateCount', data.candidate_count);
+
+            // JSONに明示的な値が入っていた目安は「ユーザー設定」として扱い、
+            // 自動計算した目安値で上書きしないようにする
+            if (data.desk_target_per_member !== null && data.desk_target_per_member !== undefined) markTargetEdited('desk');
+            if (data.stage_target_per_member !== null && data.stage_target_per_member !== undefined) markTargetEdited('stage');
+            if (data.total_target_per_member !== null && data.total_target_per_member !== undefined) markTargetEdited('total');
+
+            appData.gradeLimits = (data.grade_limits && typeof data.grade_limits === 'object')
+                ? JSON.parse(JSON.stringify(data.grade_limits))
+                : {};
+            renderGradeLimits();
+        }
+
+        function applyImportedInputData(data) {
+            const days = normalizeDaysFromJson(data);
+            if (days.length === 0) {
+                throw new Error('days または bands を含む入力JSONを指定してください');
+            }
+
+            appData.days = days;
+            appData.numDays = parseInt(data.num_days) || days.length;
+            setSelectValue('numDays', appData.numDays);
+
+            const importedMembers = normalizeMembersFromJson(data);
+            appData.members = importedMembers;
+
+            normalizeConfigFromJson(data);
+
+            // 以前の生成結果はクリア
+            appData.generatedTimetableMulti = null;
+            appData.generatedShift = null;
+
+            renderDayTabs();
+            updatePage2Options();
+            updateMemberNgTimesUI();
+            renderMembersList();
+            updateSummary();
+        }
+
+        async function importInputJson(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('jsonImportStatus');
+            status.textContent = `読み込み中: ${file.name}`;
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                applyImportedInputData(data);
+                status.textContent = `読み込み完了: ${file.name}`;
+                alert('JSONの入力データを反映しました');
+            } catch (error) {
+                console.error('JSON読み込みエラー:', error);
+                status.textContent = `読み込み失敗: ${file.name}`;
+                alert(`JSON読み込みに失敗しました: ${error.message}`);
+            } finally {
+                // 同じファイルを再選択しても onchange が発火するようにする
+                event.target.value = '';
+            }
+        }
+
+        // ページナビゲーション
+        function goToPage(pageNumber) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.getElementById(`page${pageNumber}`).classList.add('active');
+
+            document.querySelectorAll('.step').forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                if (index < pageNumber - 1) {
+                    step.classList.add('completed');
+                } else if (index === pageNumber - 1) {
+                    step.classList.add('active');
+                }
+            });
+
+            // ページ2に遷移した場合、選択肢を更新
+            if (pageNumber === 2) {
+                updatePage2Options();
+            }
+            // ページ3に遷移した場合、サマリー（日数・バンド数・メンバー数）を最新化し、
+            // 登録済みのバンド・メンバー構成から配置回数の目安を再計算する
+            if (pageNumber === 3) {
+                updateSummary();
+                updateSuggestedLimits();
+            }
+
+            window.scrollTo(0, 0);
+        }
+
+        // 登録済みのバンド数・メンバースキル構成から、卓/ステージ×リーダー/アシスタントの
+        // 1人あたり目安配置回数を推定APIで取得し、目安の表示と目安セレクトへの反映を行う。
+        // 最大回数欄は自動入力しない（空欄＝無制限のハード制約なし）。
+        // 詳細設定はページ3（メンバー登録後）にあるため、ここで初めて「登録人数」がわかり、
+        // 合理的なデフォルト値を計算できる。
+        async function updateSuggestedLimits() {
+            const noteEl = document.getElementById('limitsSuggestionNote');
+            if (!noteEl) return;
+
+            if (!appData.members || appData.members.length === 0 || getTotalBandCount() === 0) {
+                noteEl.textContent = '';
+                return;
+            }
+
+            const getSelectInt = (id) => {
+                const el = document.getElementById(id);
+                const value = el ? el.value.trim() : '';
+                return value === '' ? undefined : parseInt(value);
+            };
+
+            const payload = {
+                days: appData.days.map(day => ({
+                    day_number: day.dayNumber,
+                    bands: day.bands
+                })),
+                members: appData.members.map(m => ({
+                    name: m.name,
+                    skill_desk: m.skill_desk,
+                    skill_stage: m.skill_stage,
+                    count: 0
+                })),
+                desk_max_members: getSelectInt('deskMaxMembers'),
+                stage_max_members: getSelectInt('stageMaxMembers')
+            };
+
+            try {
+                const response = await fetchWithApiFallback('/api/estimate-limits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    noteEl.textContent = '';
+                    return;
+                }
+                const data = await response.json();
+
+                const parts = [];
+                if (data.desk.leader_avg !== null) {
+                    parts.push(`卓リーダー${data.desk.leader_count}人: 1人あたり約${data.desk.leader_avg}回`);
+                }
+                if (data.desk.assistant_avg !== null) {
+                    parts.push(`卓アシスタント${data.desk.assistant_count}人: 1人あたり約${data.desk.assistant_avg}回`);
+                }
+                if (data.stage.leader_avg !== null) {
+                    parts.push(`ステージリーダー${data.stage.leader_count}人: 1人あたり約${data.stage.leader_avg}回`);
+                }
+                if (data.stage.assistant_avg !== null) {
+                    parts.push(`ステージアシスタント${data.stage.assistant_count}人: 1人あたり約${data.stage.assistant_avg}回`);
+                }
+                noteEl.textContent = parts.length > 0
+                    ? `💡 目安（全${data.num_bands}バンド・登録人数ベースで自動計算）: ${parts.join(' / ')}`
+                    : '';
+
+                if (targetsAutoFilled.desk && data.suggested_desk_target_per_member !== null) {
+                    setSelectValue('deskTargetPerMember', data.suggested_desk_target_per_member);
+                }
+                if (targetsAutoFilled.stage && data.suggested_stage_target_per_member !== null) {
+                    setSelectValue('stageTargetPerMember', data.suggested_stage_target_per_member);
+                }
+                if (targetsAutoFilled.total && data.suggested_total_target_per_member !== null) {
+                    setSelectValue('totalTargetPerMember', data.suggested_total_target_per_member);
+                }
+            } catch (err) {
+                // 推定に失敗しても致命的ではないため、静かに無視する（詳細設定は手動入力のまま使える）
+                noteEl.textContent = '';
+            }
+        }
+
+        // 全日程を通じた登録バンド数（重複含む延べ数）を計算する
+        function getTotalBandCount() {
+            return appData.days.reduce((total, day) => total + day.bands.length, 0);
+        }
+
+        // ページ1に表示している登録バンド数を更新する
+        function updateTotalBandsDisplay() {
+            const el = document.getElementById('totalBandsCount');
+            if (el) el.textContent = `🎸 登録バンド数: ${getTotalBandCount()} バンド（全日程合計）`;
+        }
+
+        // ページ2の選択肢を更新
+        function updatePage2Options() {
+            const bands = appData.days ? 
+                appData.days.flatMap(day => day.bands) : 
+                (appData.timetable?.bands || []);
+
+            // 出演バンドのチェックボックスを生成
+            const ngBandsContainer = document.getElementById('ngBandsCheckboxes');
+            if (bands.length > 0) {
+                ngBandsContainer.innerHTML = bands.map(band => `
+                    <div style="margin-bottom: 8px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" value="${band}" class="ng-band-checkbox" style="margin-right: 8px;">
+                            <span>${band}</span>
+                        </label>
+                    </div>
+                `).join('');
+            } else {
+                ngBandsContainer.innerHTML = '<p style="color: #999; font-size: 13px;">1ページ目でバンドを追加してください</p>';
+            }
+
+            // 希望バンドのチェックボックスを生成
+            const reqBandsContainer = document.getElementById('reqBandsCheckboxes');
+            if (bands.length > 0) {
+                reqBandsContainer.innerHTML = bands.map(band => `
+                    <div style="margin-bottom: 8px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" value="${band}" class="req-band-checkbox" style="margin-right: 8px;">
+                            <span>${band}</span>
+                        </label>
+                    </div>
+                `).join('');
+            } else {
+                reqBandsContainer.innerHTML = '<p style="color: #999; font-size: 13px;">1ページ目でバンドを追加してください</p>';
+            }
+
+            // NG時間帯のUIを更新
+            updateMemberNgTimesUI();
+        }
+
+        // ページ1: 日別タイムテーブル設定
+        function updateDayTabs() {
+            const numDays = parseInt(document.getElementById('numDays').value);
+            appData.numDays = numDays;
+
+            // 既存データを保存
+            saveDayData();
+
+            // 日別データの初期化
+            if (appData.days.length < numDays) {
+                for (let i = appData.days.length; i < numDays; i++) {
+                    appData.days.push({
+                        dayNumber: i + 1,
+                        startTime: '11:30',
+                        bands: [],
+                        rehearsalMinutes: 15,
+                        performanceMinutes: 10,
+                        breakDuration: 60,
+                        breakAfterBand: ''
+                    });
+                }
+            }
+            appData.days = appData.days.slice(0, numDays);
+
+            renderDayTabs();
+        }
+
+        function renderDayTabs() {
+            const tabsContainer = document.getElementById('dayTabs');
+            const contentsContainer = document.getElementById('dayContents');
+
+            tabsContainer.innerHTML = appData.days.map((day, index) => `
+                <button type="button" class="tab ${index === 0 ? 'active' : ''}" 
+                    onclick="switchDayTab(${index})">
+                    ${day.dayNumber}日目
+                </button>
+            `).join('');
+
+            contentsContainer.innerHTML = appData.days.map((day, index) => `
+                <div class="tab-content ${index === 0 ? 'active' : ''}" id="dayContent${index}">
+                    <div class="form-group">
+                        <label>🕐 開始時間（${day.dayNumber}日目）</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <select onchange="appData.days[${index}].startTime = combineTimeValue(this.value, splitTimeValue(appData.days[${index}].startTime).minute)">
+                                ${hourOptions(splitTimeValue(day.startTime).hour)}
+                            </select>
+                            <span>：</span>
+                            <select onchange="appData.days[${index}].startTime = combineTimeValue(splitTimeValue(appData.days[${index}].startTime).hour, this.value)">
+                                ${minuteOptions(splitTimeValue(day.startTime).minute)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>⏱️ リハーサル時間（分）</label>
+                            <select onchange="appData.days[${index}].rehearsalMinutes = parseInt(this.value)">
+                                ${buildNumberOptions(day.rehearsalMinutes, rangeValues(5, 120, 5))}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>🎤 本番時間（分）</label>
+                            <select onchange="appData.days[${index}].performanceMinutes = parseInt(this.value)">
+                                ${buildNumberOptions(day.performanceMinutes, rangeValues(5, 120, 5))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>🍽️ 昼休憩（分）</label>
+                            <select onchange="appData.days[${index}].breakDuration = parseInt(this.value)">
+                                ${buildNumberOptions(day.breakDuration, rangeValues(0, 120, 10))}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>昼休憩を挿入するバンド</label>
+                            <input type="text" value="${day.breakAfterBand}" 
+                                placeholder="バンド名を入力"
+                                onchange="appData.days[${index}].breakAfterBand = this.value">
+                        </div>
+                    </div>
+
+                    <div class="comment">
+                        <strong>🎸 出演バンドリスト（${day.dayNumber}日目）:</strong>
+                        下のフィールドにバンド名を入力して追加ボタンを押してください。
+                    </div>
+
+                    <div class="form-group">
+                        <label>🎸 バンド名</label>
+                        <input type="text" id="bandName${index}" placeholder="例：LUNA SEA(D)">
+                    </div>
+
+                    <button type="button" class="btn-secondary" 
+                        onclick="addBandToDay(${index})">
+                        + バンドを追加
+                    </button>
+
+                    <!-- 追加されたバンド一覧 -->
+                    <div id="bandsList${index}" style="margin-top: 20px;"></div>
+
+                    <div class="comment" style="margin-top: 10px;">
+                        ⠿ を掴んでドラッグするとバンドの順番を入れ替えられます。
+                    </div>
+
+                    <div id="bandsDisplay${index}" style="margin-top: 10px;">
+                        ${day.bands.map((band, bandIndex) => `
+                            <div class="band-row"
+                                draggable="true"
+                                ondragstart="handleBandDragStart(event, ${index}, ${bandIndex})"
+                                ondragover="handleBandDragOver(event, ${index})"
+                                ondragleave="handleBandDragLeave(event)"
+                                ondrop="handleBandDrop(event, ${index}, ${bandIndex})">
+                                <span class="band-drag-handle" title="ドラッグして並び替え">⠿</span>
+                                <span class="band-name">${band}</span>
+                                <div class="icon-btn-group">
+                                    <button type="button" class="icon-btn" title="編集"
+                                        onclick="renameBand(${index}, ${bandIndex})">✏️</button>
+                                    <button type="button" class="icon-btn" title="削除"
+                                        onclick="removeBandFromDay(${index}, '${band}')">🗑️</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            // 初期表示
+            if (appData.days.length > 0) {
+                switchDayTab(0);
+            }
+
+            updateTotalBandsDisplay();
+        }
+
+        function switchDayTab(dayIndex) {
+            saveDayData();
+
+            document.querySelectorAll('.tab').forEach((tab, i) => {
+                tab.classList.toggle('active', i === dayIndex);
+            });
+
+            document.querySelectorAll('.tab-content').forEach((content, i) => {
+                content.classList.toggle('active', i === dayIndex);
+            });
+        }
+
+        function saveDayData() {
+            // 現在表示されているタブのデータを保存
+            const activeContent = document.querySelector('.tab-content.active');
+            if (!activeContent) return;
+
+            const dayIndex = Array.from(document.querySelectorAll('.tab-content')).indexOf(activeContent);
+            if (dayIndex >= 0 && dayIndex < appData.days.length) {
+                const bandInput = document.getElementById(`bandName${dayIndex}`);
+                if (bandInput) {
+                    // バンド名を削除（サブミット時に改めて収集）
+                }
+            }
+        }
+
+        function addBandToDay(dayIndex) {
+            const bandInput = document.getElementById(`bandName${dayIndex}`);
+            const bandName = bandInput.value.trim();
+
+            if (!bandName) {
+                alert('バンド名を入力してください');
+                return;
+            }
+
+            if (appData.days[dayIndex].bands.includes(bandName)) {
+                alert('同じバンドは追加できません');
+                return;
+            }
+
+            appData.days[dayIndex].bands.push(bandName);
+            bandInput.value = '';
+            renderDayTabs();
+            
+            // ページ2が表示されている場合、選択肢を更新
+            const page2 = document.getElementById('page2');
+            if (page2 && page2.classList.contains('active')) {
+                updatePage2Options();
+            }
+        }
+
+        function removeBandFromDay(dayIndex, bandName) {
+            appData.days[dayIndex].bands = appData.days[dayIndex].bands.filter(b => b !== bandName);
+            renderDayTabs();
+            
+            // ページ2が表示されている場合、選択肢を更新
+            const page2 = document.getElementById('page2');
+            if (page2 && page2.classList.contains('active')) {
+                updatePage2Options();
+            }
+        }
+
+        function renameBand(dayIndex, bandIndex) {
+            const bands = appData.days[dayIndex].bands;
+            const oldName = bands[bandIndex];
+            const newName = prompt('新しいバンド名を入力してください', oldName);
+            if (newName === null) return; // キャンセル
+
+            const trimmed = newName.trim();
+            if (!trimmed) {
+                alert('バンド名を入力してください');
+                return;
+            }
+            if (trimmed !== oldName && bands.includes(trimmed)) {
+                alert('同じバンドは追加できません');
+                return;
+            }
+
+            bands[bandIndex] = trimmed;
+
+            // メンバー側の出演バンド・希望バンドの参照も更新する
+            appData.members.forEach(member => {
+                member.ng_bands = (member.ng_bands || []).map(b => b === oldName ? trimmed : b);
+                member.req_bands = (member.req_bands || []).map(b => b === oldName ? trimmed : b);
+            });
+
+            renderDayTabs();
+            renderMembersList();
+
+            const page2 = document.getElementById('page2');
+            if (page2 && page2.classList.contains('active')) {
+                updatePage2Options();
+            }
+        }
+
+        // バンドのドラッグ&ドロップ並び替え
+        let bandDragState = null; // { dayIndex, bandIndex }
+
+        function handleBandDragStart(e, dayIndex, bandIndex) {
+            bandDragState = { dayIndex, bandIndex };
+            e.dataTransfer.effectAllowed = 'move';
+            try {
+                e.dataTransfer.setData('text/plain', String(bandIndex));
+            } catch (err) {
+                // 一部ブラウザでのsetData失敗は無視
+            }
+        }
+
+        function handleBandDragOver(e, dayIndex) {
+            if (!bandDragState || bandDragState.dayIndex !== dayIndex) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleBandDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        function handleBandDrop(e, dayIndex, targetIndex) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+
+            if (!bandDragState || bandDragState.dayIndex !== dayIndex) {
+                bandDragState = null;
+                return;
+            }
+
+            const sourceIndex = bandDragState.bandIndex;
+            bandDragState = null;
+            if (sourceIndex === targetIndex) return;
+
+            const bands = appData.days[dayIndex].bands;
+            const [moved] = bands.splice(sourceIndex, 1);
+            const adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+            bands.splice(adjustedTarget, 0, moved);
+
+            renderDayTabs();
+
+            const page2 = document.getElementById('page2');
+            if (page2 && page2.classList.contains('active')) {
+                updatePage2Options();
+            }
+        }
+
+        // 学年ごとの配置回数上限（詳細設定）
+        function renderGradeLimits() {
+            const container = document.getElementById('gradeLimitsContainer');
+            if (!container) return;
+
+            const grades = Object.keys(appData.gradeLimits);
+            if (grades.length === 0) {
+                container.innerHTML = '<p style="color: #999; font-size: 13px;">学年ごとの上限はまだ設定されていません</p>';
+                return;
+            }
+
+            container.innerHTML = grades.map(grade => {
+                const limits = appData.gradeLimits[grade] || {};
+                const deskMax = (limits.desk_max === undefined || limits.desk_max === null) ? '無制限' : `${limits.desk_max} 回`;
+                const stageMax = (limits.stage_max === undefined || limits.stage_max === null) ? '無制限' : `${limits.stage_max} 回`;
+                const totalMax = (limits.total_max === undefined || limits.total_max === null) ? '無制限' : `${limits.total_max} 回`;
+                return `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee;">
+                        <span>🎓 <strong>${grade}</strong> ： 卓 ${deskMax} / ステージ ${stageMax} / 合計 ${totalMax}</span>
+                        <button type="button" class="btn-secondary" style="padding: 6px 14px;" onclick="removeGradeLimit('${grade}')">🗑️ 削除</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addGradeLimit() {
+            const gradeInput = document.getElementById('gradeLimitGrade');
+            const deskInput = document.getElementById('gradeLimitDeskMax');
+            const stageInput = document.getElementById('gradeLimitStageMax');
+            const totalInput = document.getElementById('gradeLimitTotalMax');
+
+            const grade = gradeInput.value.trim();
+            if (!grade) {
+                alert('学年を入力してください');
+                return;
+            }
+
+            const limits = {};
+            if (deskInput.value.trim() !== '') limits.desk_max = parseInt(deskInput.value);
+            if (stageInput.value.trim() !== '') limits.stage_max = parseInt(stageInput.value);
+            if (totalInput.value.trim() !== '') limits.total_max = parseInt(totalInput.value);
+
+            if (limits.desk_max === undefined && limits.stage_max === undefined && limits.total_max === undefined) {
+                alert('卓・ステージ・合計のいずれか1つ以上の上限を入力してください');
+                return;
+            }
+
+            appData.gradeLimits[grade] = limits;
+
+            gradeInput.value = '';
+            deskInput.value = '';
+            stageInput.value = '';
+            totalInput.value = '';
+
+            renderGradeLimits();
+        }
+
+        function removeGradeLimit(grade) {
+            delete appData.gradeLimits[grade];
+            renderGradeLimits();
+        }
+
+        // ページ2: メンバー管理
+        // NG時間帯の編集中データ（ダイヤル式入力の一時状態）: { 0: [{start, end}, ...], 1: [...] }
+        let ngTimeDraft = {};
+
+        function updateMemberNgTimesUI() {
+            const container = document.getElementById('memberNgTimesContainer');
+            if (appData.numDays <= 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // 日数の変更に合わせてドラフトを整える
+            for (let i = 0; i < appData.numDays; i++) {
+                if (!ngTimeDraft[i]) ngTimeDraft[i] = [];
+            }
+            Object.keys(ngTimeDraft).forEach(key => {
+                if (parseInt(key) >= appData.numDays) delete ngTimeDraft[key];
+            });
+
+            let html = '<label style="display: block; margin-bottom: 10px;">⏰ NG時間帯（日別）</label>';
+            for (let i = 0; i < appData.numDays; i++) {
+                const dayLabel = i + 1;
+                const ranges = ngTimeDraft[i] || [];
+                const allDay = isAllDayNg(ranges);
+                html += `
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-size: 12px; margin-bottom: 5px; display: block; font-weight: 600;">${dayLabel}日目のNG時間帯</label>
+                        <label class="ng-allday-toggle">
+                            <input type="checkbox" ${allDay ? 'checked' : ''}
+                                onchange="toggleAllDayNg(${i}, this.checked)">
+                            🚫 終日不可（この日は丸一日NG）
+                        </label>
+                        ${allDay
+                            ? '<div class="ng-allday-note">この日は終日（00:00〜23:59）NGに設定されています。個別の時間帯を指定したい場合はチェックを外してください。</div>'
+                            : `
+                                <div id="ngRangeList${i}">
+                                    ${ranges.map((range, rangeIndex) => `
+                                        <div class="ng-range-row">
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'hour', this.value)">
+                                                ${hourOptions(splitTimeValue(range.start).hour)}
+                                            </select>
+                                            <span>：</span>
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'start', 'minute', this.value)">
+                                                ${minuteOptions(splitTimeValue(range.start).minute)}
+                                            </select>
+                                            <span class="ng-range-separator">〜</span>
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'hour', this.value)">
+                                                ${hourOptions(splitTimeValue(range.end).hour)}
+                                            </select>
+                                            <span>：</span>
+                                            <select onchange="updateNgRangeTime(${i}, ${rangeIndex}, 'end', 'minute', this.value)">
+                                                ${minuteOptions(splitTimeValue(range.end).minute)}
+                                            </select>
+                                            <button type="button" class="icon-btn" title="この時間帯を削除"
+                                                onclick="removeNgRange(${i}, ${rangeIndex})">🗑️</button>
+                                        </div>
+                                    `).join('') || '<p style="font-size: 12px; color: #999; margin: 0 0 6px 0;">NG時間帯はありません</p>'}
+                                </div>
+                                <button type="button" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;"
+                                    onclick="addNgRange(${i})">+ 時間帯を追加</button>
+                            `
+                        }
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
+        // 1件だけ「00:00〜23:59」の範囲がある場合を「終日NG」とみなす
+        function isAllDayNg(ranges) {
+            return Array.isArray(ranges) && ranges.length === 1 &&
+                ranges[0].start === '00:00' && ranges[0].end === '23:59';
+        }
+
+        // 終日スイッチのON/OFF切り替え。ONなら00:00〜23:59の1件に置き換え、
+        // OFFならその日のNG時間帯をクリアする（個別指定からやり直せるように）
+        function toggleAllDayNg(dayIndex, checked) {
+            ngTimeDraft[dayIndex] = checked ? [{ start: '00:00', end: '23:59' }] : [];
+            updateMemberNgTimesUI();
+        }
+
+        function addNgRange(dayIndex) {
+            if (!ngTimeDraft[dayIndex]) ngTimeDraft[dayIndex] = [];
+            // 分かりやすいよう開始と終了が重ならない初期値にしておく（後で自由に変更可能）
+            ngTimeDraft[dayIndex].push({ start: '00:00', end: '00:10' });
+            updateMemberNgTimesUI();
+        }
+
+        function updateNgRangeTime(dayIndex, rangeIndex, field, part, value) {
+            if (!ngTimeDraft[dayIndex] || !ngTimeDraft[dayIndex][rangeIndex]) return;
+            const current = splitTimeValue(ngTimeDraft[dayIndex][rangeIndex][field]);
+            current[part] = value;
+            ngTimeDraft[dayIndex][rangeIndex][field] = combineTimeValue(current.hour, current.minute);
+        }
+
+        function removeNgRange(dayIndex, rangeIndex) {
+            if (!ngTimeDraft[dayIndex]) return;
+            ngTimeDraft[dayIndex].splice(rangeIndex, 1);
+            updateMemberNgTimesUI();
+        }
+
+        function addMember() {
+            const name = document.getElementById('memberName').value.trim();
+            const gradeValue = document.getElementById('memberGrade').value.trim();
+            const skillDesk = parseInt(document.getElementById('skillDesk').value) || 3;
+            const skillStage = parseInt(document.getElementById('skillStage').value) || 3;
+
+            // チェックボックスから選択された値を取得
+            const ngBands = Array.from(document.querySelectorAll('.ng-band-checkbox:checked'))
+                .map(checkbox => checkbox.value);
+            const reqBands = Array.from(document.querySelectorAll('.req-band-checkbox:checked'))
+                .map(checkbox => checkbox.value);
+
+            // 日別のNG時間を収集（ダイヤル式入力から HH:MM-HH:MM 形式へ変換）
+            const ngTimesPerDay = {};
+            let hasInvalidNgRange = false;
+            for (let i = 0; i < appData.numDays; i++) {
+                const ranges = [];
+                (ngTimeDraft[i] || []).forEach(range => {
+                    if (range.start >= range.end) {
+                        hasInvalidNgRange = true;
+                        return;
+                    }
+                    ranges.push(`${range.start}-${range.end}`);
+                });
+                if (ranges.length > 0) {
+                    ngTimesPerDay[`day_${i + 1}`] = ranges;
+                }
+            }
+
+            if (!name) {
+                alert('メンバー名を入力してください');
+                return;
+            }
+
+            if (hasInvalidNgRange) {
+                alert('NG時間帯は開始時刻が終了時刻より前になるようにしてください');
+                return;
+            }
+
+            if (editingMemberId !== null) {
+                // 既存メンバーを更新（id と count は維持する）
+                const index = appData.members.findIndex(m => m.id === editingMemberId);
+                if (index !== -1) {
+                    appData.members[index] = {
+                        ...appData.members[index],
+                        name: name,
+                        grade: gradeValue || null,
+                        skill_desk: skillDesk,
+                        skill_stage: skillStage,
+                        ng_bands: ngBands,
+                        ng_times: ngTimesPerDay,
+                        req_bands: reqBands
+                    };
+                }
+                editingMemberId = null;
+            } else {
+                // 新規追加
+                const member = {
+                    id: Date.now(),
+                    name: name,
+                    grade: gradeValue || null,
+                    skill_desk: skillDesk,
+                    skill_stage: skillStage,
+                    count: 0,
+                    ng_bands: ngBands,
+                    ng_times: ngTimesPerDay,
+                    req_bands: reqBands
+                };
+                appData.members.push(member);
+            }
+
+            resetMemberForm();
+            renderMembersList();
+            updateMemberNgTimesUI();
+        }
+
+        // 登録済みメンバーの内容をフォームに読み込み、編集モードにする
+        function startEditMember(memberId) {
+            const member = appData.members.find(m => m.id === memberId);
+            if (!member) return;
+
+            // メンバー設定ページに切り替える（バンド選択肢・NG時間UIが最新化される）
+            goToPage(2);
+
+            editingMemberId = memberId;
+
+            document.getElementById('memberName').value = member.name || '';
+            document.getElementById('memberGrade').value = member.grade || '';
+            document.getElementById('skillDesk').value = member.skill_desk;
+            document.getElementById('skillStage').value = member.skill_stage;
+
+            document.querySelectorAll('.ng-band-checkbox').forEach(checkbox => {
+                checkbox.checked = member.ng_bands.includes(checkbox.value);
+            });
+            document.querySelectorAll('.req-band-checkbox').forEach(checkbox => {
+                checkbox.checked = member.req_bands.includes(checkbox.value);
+            });
+
+            const ngTimesByDay = Array.isArray(member.ng_times)
+                ? { day_1: member.ng_times }
+                : (member.ng_times || {});
+            ngTimeDraft = {};
+            for (let i = 0; i < appData.numDays; i++) {
+                const times = ngTimesByDay[`day_${i + 1}`] || [];
+                ngTimeDraft[i] = times.map(t => {
+                    const [start, end] = String(t).split('-');
+                    return { start: start || '', end: end || '' };
+                });
+            }
+            updateMemberNgTimesUI();
+
+            const submitBtn = document.getElementById('memberSubmitBtn');
+            if (submitBtn) submitBtn.textContent = '✅ メンバーを更新';
+            const cancelBtn = document.getElementById('memberCancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        }
+
+        // 編集モードを解除してフォームを空に戻す（保存はしない）
+        function cancelEditMember() {
+            editingMemberId = null;
+            resetMemberForm();
+        }
+
+        function resetMemberForm() {
+            document.getElementById('memberName').value = '';
+            document.getElementById('memberGrade').value = '';
+            document.getElementById('skillDesk').value = '3';
+            document.getElementById('skillStage').value = '3';
+
+            document.querySelectorAll('.ng-band-checkbox, .req-band-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+
+            ngTimeDraft = {};
+            updateMemberNgTimesUI();
+
+            const submitBtn = document.getElementById('memberSubmitBtn');
+            if (submitBtn) submitBtn.textContent = '+ メンバーを追加';
+            const cancelBtn = document.getElementById('memberCancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+        }
+
+        function removeMember(memberId) {
+            appData.members = appData.members.filter(m => m.id !== memberId);
+            if (editingMemberId === memberId) {
+                // 編集中だったメンバーが削除された場合はフォームをリセットする
+                editingMemberId = null;
+                resetMemberForm();
+            }
+            renderMembersList();
+        }
+
+        function renderMembersList() {
+            const container = document.getElementById('membersList');
+
+            if (appData.members.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">メンバーが登録されていません</p>';
+                return;
+            }
+
+            container.innerHTML = appData.members.map(member => {
+                const ngTimesByDay = Array.isArray(member.ng_times)
+                    ? { day_1: member.ng_times }
+                    : (member.ng_times || {});
+                const ngTimesDisplay = Object.entries(ngTimesByDay).map(([day, times]) => {
+                    const safeTimes = Array.isArray(times) ? times : [];
+                    const isAllDay = safeTimes.length === 1 && safeTimes[0] === '00:00-23:59';
+                    return `<div>${day}: ${isAllDay ? '終日' : safeTimes.join('、')}</div>`;
+                }).join('');
+
+                return `
+                    <div class="member-card">
+                        <div class="card-header-row">
+                            <h3>${member.name}${member.grade ? `<span style="font-size: 12px; color: #667eea; font-weight: 600; margin-left: 8px;">🎓 ${member.grade}</span>` : ''}</h3>
+                            <div class="icon-btn-group">
+                                <button type="button" class="icon-btn" title="編集" onclick="startEditMember(${member.id})">✏️</button>
+                                <button type="button" class="icon-btn" title="削除" onclick="removeMember(${member.id})">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="member-info">
+                            <div><strong>卓スキル:</strong> ${member.skill_desk}/5</div>
+                            <div><strong>ステージスキル:</strong> ${member.skill_stage}/5</div>
+                            <div><strong>NG バンド:</strong> ${member.ng_bands.length > 0 ? member.ng_bands.join(', ') : 'なし'}</div>
+                            <div><strong>NG 時間:</strong> ${ngTimesDisplay || 'なし'}</div>
+                            <div><strong>希望バンド:</strong> ${member.req_bands.length > 0 ? member.req_bands.join(', ') : 'なし'}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ページ1: 数値入力欄（選択式）の初期選択肢を組み立てる
+        function initStaticSelects() {
+            document.getElementById('numDays').innerHTML =
+                buildNumberOptions(1, rangeValues(1, 10, 1));
+
+            document.getElementById('deskMaxMembers').innerHTML =
+                buildNumberOptions('', rangeValues(1, 20, 1), 'デフォルト: 2');
+            document.getElementById('stageMaxMembers').innerHTML =
+                buildNumberOptions('', rangeValues(1, 20, 1), 'デフォルト: 2');
+
+            document.getElementById('deskTargetPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '自動（人数から算出）');
+            document.getElementById('stageTargetPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '自動（人数から算出）');
+            document.getElementById('totalTargetPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '自動（人数から算出）');
+
+            document.getElementById('deskLimitPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
+            document.getElementById('stageLimitPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
+            document.getElementById('totalLimitPerMember').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), '無制限');
+
+            document.getElementById('candidateCount').innerHTML =
+                buildNumberOptions('', rangeValues(1, 50, 1), 'デフォルト: 12');
+
+            document.getElementById('gradeLimitDeskMax').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
+            document.getElementById('gradeLimitStageMax').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
+            document.getElementById('gradeLimitTotalMax').innerHTML =
+                buildNumberOptions('', rangeValues(0, 50, 1), 'なし');
+        }
+
+        // ページ2での初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            initStaticSelects();
+
+            // ページ2タブに切り替わったときにNG時間UIを更新
+            const page2Observer = new MutationObserver(function() {
+                const page2 = document.getElementById('page2');
+                if (page2 && page2.classList.contains('active')) {
+                    updateMemberNgTimesUI();
+                }
+            });
+
+            const container = document.querySelector('.container');
+            page2Observer.observe(container, { attributes: true, subtree: true });
+        });
+
+        // ページ3: シフト生成・プレビュー
+
+        // 詳細設定（任意項目）をペイロード用オブジェクトにまとめる
+        function collectAdvancedConfig() {
+            const config = {};
+            const getValue = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.value.trim() : '';
+            };
+
+            const deskMaxMembers = getValue('deskMaxMembers');
+            if (deskMaxMembers !== '') config.desk_max_members = parseInt(deskMaxMembers);
+
+            const stageMaxMembers = getValue('stageMaxMembers');
+            if (stageMaxMembers !== '') config.stage_max_members = parseInt(stageMaxMembers);
+
+            const deskTargetPerMember = getValue('deskTargetPerMember');
+            if (deskTargetPerMember !== '') config.desk_target_per_member = parseInt(deskTargetPerMember);
+
+            const stageTargetPerMember = getValue('stageTargetPerMember');
+            if (stageTargetPerMember !== '') config.stage_target_per_member = parseInt(stageTargetPerMember);
+
+            const totalTargetPerMember = getValue('totalTargetPerMember');
+            if (totalTargetPerMember !== '') config.total_target_per_member = parseInt(totalTargetPerMember);
+
+            const deskLimitPerMember = getValue('deskLimitPerMember');
+            if (deskLimitPerMember !== '') config.desk_limit_per_member = parseInt(deskLimitPerMember);
+
+            const stageLimitPerMember = getValue('stageLimitPerMember');
+            if (stageLimitPerMember !== '') config.stage_limit_per_member = parseInt(stageLimitPerMember);
+
+            const totalLimitPerMember = getValue('totalLimitPerMember');
+            if (totalLimitPerMember !== '') config.total_limit_per_member = parseInt(totalLimitPerMember);
+
+            const candidateCount = getValue('candidateCount');
+            if (candidateCount !== '') config.candidate_count = parseInt(candidateCount);
+
+            if (Object.keys(appData.gradeLimits).length > 0) {
+                config.grade_limits = appData.gradeLimits;
+            }
+
+            return config;
+        }
+
+        // 成立しなかった原因（reason）をわかりやすい文字列に整形
+        function formatInfeasibleReason(entry) {
+            if (entry.reason) return entry.reason;
+            const parts = [];
+            if (!entry.desk_has_leader) parts.push('卓にリーダー（スキル3以上）不在');
+            if (!entry.stage_has_leader) parts.push('ステージにリーダー（スキル3以上）不在');
+            return parts.join('、') || '成立条件を満たせませんでした';
+        }
+
+        function showShiftError(data, fallbackMessage) {
+            const box = document.getElementById('shiftErrorBox');
+            if (!box) return;
+
+            const hasPreview = !!(data && data.timetable_multi);
+            const lines = [`⚠️ ${(data && data.error) || fallbackMessage || '一部のバンドが基準を満たせませんでした'}`];
+            if (hasPreview) {
+                lines.push('下のプレビューに、埋まった範囲の結果を表示しています。⚠️ の付いたバンド・セルが基準を満たせなかった箇所です。');
+            }
+
+            if (data && data.infeasible_days) {
+                for (const [dayKey, bands] of Object.entries(data.infeasible_days)) {
+                    const dayNum = dayKey.split('_')[1] || dayKey;
+                    lines.push(`\n【${dayNum}日目で成立しなかったバンド】`);
+                    bands.forEach(b => lines.push(`・${b.band} → ${formatInfeasibleReason(b)}`));
+                }
+            } else if (data && data.infeasible_bands) {
+                lines.push('\n【成立しなかったバンド】');
+                data.infeasible_bands.forEach(b => lines.push(`・${b.band} → ${formatInfeasibleReason(b)}`));
+            }
+
+            box.textContent = lines.join('\n');
+            box.style.display = 'block';
+        }
+
+        function hideShiftError() {
+            const box = document.getElementById('shiftErrorBox');
+            if (box) {
+                box.style.display = 'none';
+                box.textContent = '';
+            }
+        }
+
+        // Python バックエンドを呼び出す
+        // 戻り値: { ok: boolean, data: object|null }
+        // ネットワークエラー（サーバー未起動等）はここで alert し、それ以外のエラー（400/500の詳細）は data として返す
+        async function callPythonBackend(payload) {
+            try {
+                const response = await fetchWithApiFallback('/api/generate-shift-multi-day', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (parseError) {
+                    data = null;
+                }
+
+                if (!response.ok) {
+                    return { ok: false, data };
+                }
+
+                return { ok: true, data };
+            } catch (error) {
+                console.error('Python バックエンド通信エラー:', error);
+                const isNetworkError =
+                    error.message.includes('Failed to fetch') ||
+                    error.message.includes('NetworkError') ||
+                    error.message.includes('ERR_CONNECTION');
+                if (isNetworkError) {
+                    alert('Python サーバーとの通信に失敗しました。\nサーバーが起動していることを確認してください。\n\n起動コマンド: python app.py');
+                } else {
+                    alert(`シフト生成エラー: ${error.message}`);
+                }
+                return { ok: false, data: null };
+            }
+        }
+
+        async function generateShiftAndPreview() {
+            // ページ1のデータを保存
+            appData.numDays = parseInt(document.getElementById('numDays').value);
+            saveDayData();
+
+            // バリデーション
+            if (appData.numDays < 1) {
+                alert('イベント日数を設定してください');
+                return;
+            }
+
+            for (let i = 0; i < appData.days.length; i++) {
+                if (appData.days[i].bands.length === 0) {
+                    alert(`${i + 1}日目に最低1つ以上のバンドを追加してください`);
+                    return;
+                }
+            }
+
+            if (appData.members.length === 0) {
+                alert('最低1人以上のメンバーを追加してください');
+                return;
+            }
+
+            hideShiftError();
+
+            // Python バックエンドへのペイロード構築（詳細設定は任意項目として展開する）
+            const payload = {
+                num_days: appData.numDays,
+                days: appData.days.map(day => ({
+                    day_number: day.dayNumber,
+                    start_time: day.startTime,
+                    bands: day.bands,
+                    rh_mins: day.rehearsalMinutes,
+                    act_mins: day.performanceMinutes,
+                    break_duration: day.breakDuration,
+                    break_after_band: day.breakAfterBand
+                })),
+                members: appData.members,
+                ...collectAdvancedConfig()
+            };
+
+            console.log('Payload:', JSON.stringify(payload, null, 2));
+
+            // Python API を呼び出し
+            const result = await callPythonBackend(payload);
+
+            if (!result.ok) {
+                if (result.data) {
+                    // 成立しなかった原因を表示しつつ、埋まった範囲の結果はそのままプレビューし続ける（止めない）
+                    appData.infeasibleByDay = result.data.infeasible_days || {};
+                    showShiftError(result.data);
+                    if (result.data.timetable_multi) appData.generatedTimetableMulti = result.data.timetable_multi;
+                    if (result.data.shift) appData.generatedShift = result.data.shift;
+                    if (result.data.members) appData.members = result.data.members;
+                    if (appData.generatedTimetableMulti) {
+                        updateSummary();
+                        displayShiftResults();
+                    }
+                } else {
+                    appData.infeasibleByDay = {};
+                }
+                return;
+            }
+
+            // 結果を保存
+            const data = result.data;
+            appData.infeasibleByDay = {};
+            appData.generatedTimetableMulti = data.timetable_multi;
+            appData.generatedShift = data.shift;
+            appData.members = data.members;
+
+            // プレビュー表示
+            updateSummary();
+            displayShiftResults();
+        }
+
+        function updateSummary() {
+            document.getElementById('summaryDays').textContent = `${appData.numDays} 日`;
+            document.getElementById('summaryBands').textContent = `${getTotalBandCount()} バンド`;
+            document.getElementById('summaryMembers').textContent = `${appData.members.length} 人`;
+        }
+
+        function displayShiftResults() {
+            const container = document.getElementById('shiftTabsContainer');
+
+            if (!appData.generatedTimetableMulti) {
+                container.innerHTML = '<p style="color: #999; text-align: center; padding: 30px;">シフトデータがありません</p>';
+                return;
+            }
+
+            // タブを生成
+            const tabs = [];
+            const contents = [];
+
+            let hasAnyIssue = false;
+
+            for (const dayKey in appData.generatedTimetableMulti) {
+                const dayNum = parseInt(dayKey.split('_')[1]);
+                const timetable = appData.generatedTimetableMulti[dayKey];
+                const shift = appData.generatedShift[dayKey];
+
+                // この日で基準を満たせなかったバンドをバンド名で引けるようにする
+                const infeasibleForDay = {};
+                (appData.infeasibleByDay[dayKey] || []).forEach(entry => {
+                    infeasibleForDay[entry.band] = entry;
+                });
+                if (Object.keys(infeasibleForDay).length > 0) hasAnyIssue = true;
+
+                tabs.push(`
+                    <button type="button" class="tab ${dayNum === 1 ? 'active' : ''}" 
+                        onclick="switchShiftTab(${dayNum - 1})">
+                        ${dayNum}日目${infeasibleForDay && Object.keys(infeasibleForDay).length > 0 ? ' ⚠️' : ''}
+                    </button>
+                `);
+
+                const rows = timetable.map(entry => {
+                    const assigned = shift[entry.name] || { "卓": [], "ステージ": [] };
+                    const desk = assigned["卓"].join('、');
+                    const stage = assigned["ステージ"].join('、');
+                    const entryType = entry.type === 'rh' ? 'リハ' : entry.type === 'act' ? '本番' : '休憩';
+                    const issue = entry.type !== 'break' ? infeasibleForDay[entry.name] : null;
+
+                    const deskShort = issue && issue.desk_has_leader === false;
+                    const stageShort = issue && issue.stage_has_leader === false;
+
+                    const deskCell = deskShort
+                        ? `<span style="color: #c62828;">${desk || '-'}</span><br><small style="color: #c62828;">⚠️ リーダー（スキル3以上）不在</small>`
+                        : (desk || '-');
+                    const stageCell = stageShort
+                        ? `<span style="color: #c62828;">${stage || '-'}</span><br><small style="color: #c62828;">⚠️ リーダー（スキル3以上）不在</small>`
+                        : (stage || '-');
+
+                    const rowStyle = issue ? ' style="background: #fff5f5;"' : '';
+
+                    return `
+                        <tr${rowStyle}>
+                            <td>${entry.time}</td>
+                            <td>${entryType}</td>
+                            <td>${entry.name}${issue ? ' ⚠️' : ''}</td>
+                            <td>${deskCell}</td>
+                            <td>${stageCell}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                contents.push(`
+                    <div class="tab-content ${dayNum === 1 ? 'active' : ''}" id="shiftContent${dayNum - 1}">
+                        <div class="preview-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>時間帯</th>
+                                        <th>種別</th>
+                                        <th>バンド名</th>
+                                        <th>担当（卓）</th>
+                                        <th>担当（ステージ）</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `);
+            }
+
+            container.innerHTML = `
+                ${hasAnyIssue ? '<p style="font-size: 12px; color: #c62828; margin-bottom: 10px;">⚠️ の付いたバンドは卓・ステージのスキル基準を満たせませんでした（担当者不足の可能性があります）。それ以外のバンドは正常に埋まっています。</p>' : ''}
+                <div class="tabs">${tabs.join('')}</div>
+                ${contents.join('')}
+            `;
+
+            // メンバーカウント集計を表示
+            displayMemberCounts();
+        }
+
+        function switchShiftTab(tabIndex) {
+            document.querySelectorAll('#shiftTabsContainer .tab').forEach((tab, i) => {
+                tab.classList.toggle('active', i === tabIndex);
+            });
+
+            document.querySelectorAll('#shiftTabsContainer .tab-content').forEach((content, i) => {
+                content.classList.toggle('active', i === tabIndex);
+            });
+        }
+
+        function displayMemberCounts() {
+            const countBody = document.getElementById('memberCountBody');
+
+            if (!appData.members || appData.members.length === 0) {
+                countBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999; padding: 30px;">メンバーデータがありません</td></tr>';
+                return;
+            }
+
+            const sortedMembers = [...appData.members].sort((a, b) => b.count - a.count);
+
+            const rows = sortedMembers.map(member => {
+                const grade = (member.grade !== undefined && member.grade !== null && member.grade !== '') ? member.grade : '-';
+                const deskCount = (member.desk_count !== undefined && member.desk_count !== null) ? `${member.desk_count} 回` : '-';
+                const stageCount = (member.stage_count !== undefined && member.stage_count !== null) ? `${member.stage_count} 回` : '-';
+                return `
+                    <tr>
+                        <td>${member.name}</td>
+                        <td>${grade}</td>
+                        <td style="font-weight: 600; color: #667eea;">${member.count} 回</td>
+                        <td>${deskCount}</td>
+                        <td>${stageCount}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            countBody.innerHTML = rows;
+        }
+
+        // エクセル出力
+        async function downloadExcel() {
+            if (!appData.generatedTimetableMulti) {
+                alert('先にシフトを生成してください');
+                return;
+            }
+
+            try {
+                const payload = {
+                    timetable_multi: appData.generatedTimetableMulti,
+                    shift: appData.generatedShift,
+                    members: appData.members
+                };
+
+                const response = await fetchWithApiFallback('/api/download-excel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error('ファイルダウンロード失敗');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `pa_shift_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+
+                alert('エクセルファイルをダウンロードしました！');
+            } catch (error) {
+                console.error('ダウンロードエラー:', error);
+                alert('ファイルのダウンロードに失敗しました。');
+            }
+        }
+
+        // 初期化
+        window.addEventListener('load', function() {
+            updateDayTabs();
+            renderMembersList();
+            updateMemberNgTimesUI();
+            renderGradeLimits();
+        });
+    </script>
+
+    <!--
+        背景演出（にこちゃんマークが跳ね回る）。
+        本体のシフト生成ロジックとは完全に独立したIIFEで、
+        画面の一番背面（z-index: -1, pointer-events: none）に描画するだけなので、
+        既存の入力・ボタン・API呼び出しには一切干渉しない。
+    -->
+    <script>
+    (function() {
+        var canvas = document.getElementById('bgEmojiCanvas');
+        if (!canvas || !canvas.getContext) return;
+
+        var reduceMotion = window.matchMedia &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduceMotion) return;
+
+        var ctx = canvas.getContext('2d');
+        var DPR = Math.min(window.devicePixelRatio || 1, 2);
+        var faces = [];
+        var FACE_COUNT = 13;
+
+        var PASTEL_COLORS = [
+            '#FFD6E8', '#FFF3B0', '#C8F4DE', '#C9E4FF',
+            '#E4D6FF', '#FFE0C2', '#D6FFF6', '#FFD6D6'
+        ];
+
+        function randomPastel(exclude) {
+            var choices = PASTEL_COLORS.filter(function(c) { return c !== exclude; });
+            return choices[Math.floor(Math.random() * choices.length)];
+        }
+
+        function resizeCanvas() {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            canvas.width = w * DPR;
+            canvas.height = h * DPR;
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        }
+
+        function createFace() {
+            var r = 26 + Math.random() * 20;
+            return {
+                x: Math.random() * Math.max(1, window.innerWidth - 2 * r) + r,
+                y: Math.random() * Math.max(1, window.innerHeight - 2 * r) + r,
+                r: r,
+                vx: (Math.random() - 0.5) * 2.4 || 0.8,
+                vy: (Math.random() - 0.5) * 2.4 || 0.8,
+                color: randomPastel(null)
+            };
+        }
+
+        function initFaces() {
+            faces = [];
+            for (var i = 0; i < FACE_COUNT; i++) {
+                faces.push(createFace());
+            }
+        }
+
+        function drawSmiley(f) {
+            var x = f.x, y = f.y, r = f.r;
+
+            // 顔
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = f.color;
+            ctx.fill();
+            ctx.lineWidth = Math.max(1, r * 0.08);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.stroke();
+
+            // 目
+            var eyeOffsetX = r * 0.35;
+            var eyeOffsetY = r * 0.2;
+            var eyeR = Math.max(1.5, r * 0.09);
+            ctx.fillStyle = 'rgba(60, 50, 60, 0.75)';
+            ctx.beginPath();
+            ctx.arc(x - eyeOffsetX, y - eyeOffsetY, eyeR, 0, Math.PI * 2);
+            ctx.arc(x + eyeOffsetX, y - eyeOffsetY, eyeR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 口（にこちゃんの弧）
+            ctx.beginPath();
+            ctx.arc(x, y + r * 0.05, r * 0.5, Math.PI * 0.12, Math.PI * 0.88, false);
+            ctx.lineWidth = Math.max(1.5, r * 0.1);
+            ctx.strokeStyle = 'rgba(60, 50, 60, 0.75)';
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+
+        function step() {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            ctx.clearRect(0, 0, w, h);
+
+            for (var i = 0; i < faces.length; i++) {
+                var f = faces[i];
+                f.x += f.vx;
+                f.y += f.vy;
+
+                if (f.x - f.r <= 0) {
+                    f.x = f.r;
+                    f.vx *= -1;
+                    f.color = randomPastel(f.color);
+                } else if (f.x + f.r >= w) {
+                    f.x = w - f.r;
+                    f.vx *= -1;
+                    f.color = randomPastel(f.color);
+                }
+
+                if (f.y - f.r <= 0) {
+                    f.y = f.r;
+                    f.vy *= -1;
+                    f.color = randomPastel(f.color);
+                } else if (f.y + f.r >= h) {
+                    f.y = h - f.r;
+                    f.vy *= -1;
+                    f.color = randomPastel(f.color);
+                }
+
+                drawSmiley(f);
+            }
+
+            window.requestAnimationFrame(step);
+        }
+
+        var resizeTimer = null;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(resizeCanvas, 150);
+        });
+
+        resizeCanvas();
+        initFaces();
+        window.requestAnimationFrame(step);
+    })();
+    </script>
+</body>
+</html>

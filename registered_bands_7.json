@@ -1,0 +1,206 @@
+{
+  "num_days": 1,
+  "days": [
+    {
+      "day_number": 1,
+      "start_time": "12:00",
+      "bands": [
+        "チョーキューメイ",
+        "サカナクション",
+        "ラグヘッズ",
+        "結束バンド",
+        "171",
+        "cinema staff",
+        "ペルシカリア",
+        "ストレイテナー",
+        "SPECIAL OTHERS",
+        "藤井風",
+        "[Alexandros]",
+        "KEYTALK",
+        "backnumber",
+        "Aooo",
+        "ヨルシカ",
+        "ポルノグラフィティ",
+        "星野源",
+        "GOINGSTEADY"
+      ],
+      "rh_mins": 10,
+      "act_mins": 5,
+      "break_duration": 0,
+      "break_after_band": ""
+    }
+  ],
+  "members": [
+    {
+      "name": "はる屋",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["サカナクション"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "たまきち",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["ポルノグラフィティ"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "沼田",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["ペルシカリア"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "D",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "むた",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["結束バンド", "171"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "しゅんや",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["結束バンド", "ペルシカリア"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "あつ屋",
+      "skill_desk": 1,
+      "skill_stage": 1,
+      "count": 0,
+      "ng_bands": ["ポルノグラフィティ"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "りょーじ",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["ストレイテナー"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "るい",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["[Alexandros]", "星野源"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "こうしん",
+      "skill_desk": 1,
+      "skill_stage": 1,
+      "count": 0,
+      "ng_bands": ["ポルノグラフィティ"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "みらい",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["cinema staff"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "こうた",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["cinema staff", "SPECIAL OTHERS"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "やまと",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["ストレイテナー", "GOINGSTEADY"],
+      "ng_times": {
+        "day_1": ["00:00-13:10"]
+      },
+      "req_bands": []
+    },
+    {
+      "name": "so",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": ["[Alexandros]", "ヨルシカ"],
+      "ng_times": {
+        "day_1": []
+      },
+      "req_bands": []
+    },
+    {
+      "name": "ばんば",
+      "skill_desk": 3,
+      "skill_stage": 3,
+      "count": 0,
+      "ng_bands": [],
+      "ng_times": {
+        "day_1": ["00:00-13:10"]
+      },
+      "req_bands": []
+    }
+  ],
+  "desk_max_members": null,
+  "stage_max_members": null,
+  "desk_limit_per_member": null,
+  "stage_limit_per_member": null,
+  "grade_limits": {},
+  "candidate_count": 12
+}
